@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Emergency SOS | MyCarRepair</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="/socket.io/socket.io.js"></script> <!-- Load Socket.io -->
+    <link rel="stylesheet" href="/css/alerts.css">
+<script src="/js/alerts.js"></script>
+</head>
+<body style="background: var(--emergency-red); color: white;">
+
+    <div style="padding: 40px 20px; text-align: center;">
+        <i data-lucide="alert-octagon" size="60" style="margin-bottom: 20px;"></i>
+        <h1>Emergency SOS</h1>
+        <p>Stay calm. We are finding the nearest mechanics.</p>
+    </div>
+
+    <div style="background: white; border-radius: 30px 30px 0 0; padding: 30px 20px; min-height: 60vh;">
+        <div id="sos-ui">
+            <!-- Initial Issue Selection -->
+            <div id="selection-screen">
+                <h3 style="color: #1e293b; margin-bottom: 20px;">What is the issue?</h3>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <button class="sos-type" onclick="sendSOS('Engine Failure')">Engine Failure</button>
+                    <button class="sos-type" onclick="sendSOS('Flat Tire')"><i data-lucide="disc"></i> Flat Tire</button>
+                    <button class="sos-type" onclick="sendSOS('Dead Battery')"><i data-lucide="battery-warning"></i> Dead Battery</button>
+                    <button class="sos-type" onclick="sendSOS('Towing')"><i data-lucide="truck"></i> Towing</button>
+                    <button class="sos-type" onclick="sendSOS('Low Fuel')"><i data-lucide="fuel"></i> Low Fuel</button>
+                    <button class="sos-type" onclick="sendSOS('Car Crash')"><i data-lucide="alert-triangle"></i> Car Crash</button>
+                </div>
+            </div>
+
+            <!-- Waiting Screen (Hidden by default) -->
+            <div id="waiting-screen" style="display: none; text-align: center; padding: 40px 0;">
+                <div class="pulse-loader"></div>
+                <h2 style="color: #1e293b;">Finding Mechanic...</h2>
+                <p id="comfort-msg" style="color: #64748b; margin: 15px 0;">Connecting you to the nearest expert.</p>
+                <button onclick="cancelSOS()" style="background: none; border: 1px solid #cbd5e1; padding: 10px 20px; border-radius: 8px; color: #64748b; margin-top: 40px;">Cancel Request</button>
+            </div>
+
+            <!-- Accepted UI (Hidden by default) -->
+            <div id="accepted-ui" style="display: none;">
+                <div class="mechanic-arriving-card">
+                    <div style="text-align: center; margin-bottom: 20px;">
+                        <div style="background: #f0fdf4; width: 60px; height: 60px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 10px auto; color: #22c55e;">
+                            <i data-lucide="shield-check" size="32"></i>
+                        </div>
+                        <h3 style="color: #1e293b; margin: 0;">Help is arriving!</h3>
+                        <p style="color: #64748b; font-size: 13px;">A mechanic has accepted your request</p>
+                    </div>
+
+                    <div style="background: #f8fafc; padding: 15px; border-radius: 15px; display: flex; align-items: center; gap: 15px; margin-bottom: 20px;">
+                        <div style="background: var(--primary-blue); color: white; width: 45px; height: 45px; border-radius: 12px; display: flex; align-items: center; justify-content: center;">
+                            <i data-lucide="wrench"></i>
+                        </div>
+                        <div>
+                            <p style="font-size: 11px; color: #94a3b8; font-weight: 800; letter-spacing: 1px;">MECHANIC</p>
+                            <strong id="display-mech-name" style="color: #1e293b; font-size: 16px;">--</strong>
+                        </div>
+                    </div>
+
+                    <a href="#" id="display-mech-call" class="btn-call">
+                        <i data-lucide="phone-call"></i> Call Mechanic
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- <label class="label-text">VEHICLE INVOLVED</label>
+    <div class="input-box">
+        <i data-lucide="car" size="18" color="#94a3b8"></i>
+        <select name="vehicle_id" required style="width: 100%; border: none; background: transparent; font-weight: 700;">
+            <% if (cars.length === 0) { %>
+                <option disabled selected>Please add a car in your garage first</option>
+            <% } else { %>
+                <!-- If only 1 car, this option becomes 'selected' automatically -->
+                <% cars.forEach(car => { %>
+                    <option value="<%= car.id %>" <%= cars.length === 1 ? 'selected' : '' %>>
+                        <%= car.make %> <%= car.model %> (<%= car.plate_number %>)
+                    </option>
+                <% }); %>
+            <% } %>
+        </select>
+    </div>
+
+    <!-- Add this ABOVE the 'What is the issue?' buttons
+    <div style="background: white; border-radius: 20px; padding: 20px; margin-bottom: 25px; border: 1.5px solid #e2e8f0;" class="reveal">
+        <span class="label-text" style="color: #64748b; font-size: 11px;">EMERGENCY VEHICLE</span>
+        <div style="display: flex; align-items: center; gap: 10px; margin-top: 5px;">
+            <select id="sos-vehicle-id" style="width: 100%; padding: 10px; border-radius: 10px; border: 1px solid #f1f5f9; font-weight: 700; color: var(--primary-blue);">
+                <% cars.forEach(car => { %>
+                    <option value="<%= car.id %>" <%= cars.length === 1 ? 'selected' : '' %>><%= car.make %> <%= car.model %> (<%= car.plate_number %>)</option>
+                <% }); %>
+            </select>
+        </div>
+    </div>
+
+    <!-- Professional Emergency Vehicle Selection Card -->
+    <div class="sos-car-card animate-pop-in">
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <i data-lucide="car" size="22" color="#0f172a"></i>
+            <span class="label-text" style="font-size: 13px; font-weight: 800; color: #0f172a;">Select Emergency Vehicle</span>
+        </div>
+        <div style="margin-top: 12px;">
+            <select id="sos-vehicle-id" class="sos-select" required>
+                <% if (cars.length === 0) { %>
+                    <option disabled selected>Please add a car in your garage first</option>
+                <% } else { %>
+                    <% cars.forEach(car => { %>
+                        <option value="<%= car.id %>" <%= cars.length === 1 ? 'selected' : '' %>>
+                            <%= car.make %> <%= car.model %> (<%= car.plate_number %>)
+                        </option>
+                    <% }); %>
+                <% } %>
+            </select>
+        </div>
+    </div> 
+
+    <style>
+        /* THE TRANSITION TO HELP */
+        body.help-arriving {
+            background: #15803d !important; /* Professional Forest Green */
+            transition: background 1s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .mechanic-arriving-card {
+            background: white; border-radius: 25px; padding: 25px;
+            margin-top: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+            animation: popIn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        .btn-call {
+            background: #22c55e; color: white; display: flex; align-items: center;
+            justify-content: center; gap: 10px; padding: 18px; border-radius: 15px;
+            text-decoration: none; font-weight: 800; font-size: 18px;
+            box-shadow: 0 10px 20px rgba(34, 197, 94, 0.3);
+        }
+    </style>
+
+    <script>
+        lucide.createIcons();
+        const socket = io();
+        const messages = ["Mechanics usually arrive in 10-15 mins.", "We've notified 5 nearby garages.", "Stay safe, help is on the way."];
+        let msgIndex = 0;
+
+        function sendSOS(issue) {
+            const selectedVehicle = document.getElementById('sos-vehicle-id').value;
+            
+            if(!selectedVehicle) {
+                alert("Please register or select a car first!");
+                return;
+            }
+
+            document.getElementById('selection-screen').style.display = 'none';
+            document.getElementById('waiting-screen').style.display = 'block';
+            
+            // Now sending vehicle_id so server can fetch fuel/tyre details
+            socket.emit('emergency_sos', { 
+                issue: issue, 
+                ownerName: "<%= userName %>",
+                vehicleId: selectedVehicle 
+            });
+            
+            // Cycle comforting messages
+            setInterval(() => {
+                document.getElementById('comfort-msg').innerText = messages[msgIndex % messages.length];
+                msgIndex++;
+            }, 4000);
+        }
+
+        function cancelSOS() {
+            socket.emit('cancel_sos');
+            location.href = '/owner/dashboard';
+        }
+        
+        socket.on('job_taken', (data) => {
+            // 1. Check if the accepted job is MINE
+            if (data.jobId == myJobId) {
+                
+                // 2. Change background to Green
+                document.body.classList.add('help-arriving');
+
+                // 3. Hide the loader and "Finding Mechanic" text
+                document.getElementById('status-indicator').style.display = 'none';
+                document.getElementById('wait-title').innerText = "Mechanic Found";
+                document.getElementById('comfort-msg').style.display = 'none';
+
+                // 4. Show Mechanic Info
+                document.getElementById('display-mech-name').innerText = data.mechanicName;
+                document.getElementById('display-mech-call').href = "tel:" + data.mechanicPhone;
+                document.getElementById('accepted-ui').style.display = 'block';
+                
+                // Play success sound
+                new Audio('https://assets.mixkit.co/active_storage/sfx/1435/1435-preview.mp3').play();
+                
+                lucide.createIcons();
+            }
+        });
+    </script>
+
+
+</body>
+</html>

@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Select Mechanic | MyCarRepair</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="stylesheet" href="/css/alerts.css">
+    <script src="/js/alerts.js"></script>
+
+    <style>
+        /* Reusing and extending animations from Step 1 */
+        .animate-fade-up {
+            animation: fadeUp 0.6s cubic-bezier(0.23, 1, 0.32, 1) both;
+            animation-delay: calc(var(--delay, 0) * 1s);
+        }
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Mechanic Card Styling */
+        .mech-radio { display: none; }
+        
+        .mech-card {
+            background: white;
+            border: 2px solid #e2e8f0;
+            border-radius: 20px;
+            padding: 20px;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .mech-avatar {
+            width: 60px;
+            height: 60px;
+            background: #f1f5f9;
+            border-radius: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--primary-blue);
+        }
+
+        .rating-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            background: #fffbeb;
+            color: #d97706;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 800;
+        }
+
+        .specialty-tag {
+            font-size: 10px;
+            background: #eff6ff;
+            color: #2563eb;
+            padding: 2px 8px;
+            border-radius: 5px;
+            text-transform: uppercase;
+            font-weight: 700;
+            margin-top: 5px;
+            display: inline-block;
+        }
+
+        /* Selection Feedback */
+        .mech-radio:checked + .mech-card {
+            border-color: var(--action-orange);
+            background: #fff7ed;
+            transform: translateX(8px);
+        }
+
+        .mech-radio:checked + .mech-card::after {
+            content: '';
+            position: absolute;
+            left: 0; top: 0; bottom: 0;
+            width: 6px;
+            background: var(--action-orange);
+        }
+
+        .check-mark {
+            margin-left: auto;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            border: 2px solid #cbd5e1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            transition: 0.3s;
+        }
+
+        .mech-radio:checked + .mech-card .check-mark {
+            background: var(--action-orange);
+            border-color: var(--action-orange);
+        }
+
+        /* Progress Bar for Step 2 (100%) */
+        .progress-fill-full {
+            width: 100%;
+            height: 100%;
+            background: var(--action-orange);
+            border-radius: 10px;
+            box-shadow: 0 0 15px var(--action-orange);
+        }
+    </style>
+
+    
+</head>
+<body style="background: #f8fafc; padding-bottom: 50px;">
+
+    <!-- Consistent Header -->
+    <div style="background: var(--primary-blue); padding: 35px 20px; color: white; border-radius: 0 0 30px 30px;">
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+            <div style="display: flex; align-items: center; gap: 15px;">
+                <button onclick="history.back()" style="color: white; background: rgba(255,255,255,0.1); border:none; padding: 8px; border-radius: 12px; display: flex;"><i data-lucide="arrow-left" size="20"></i></button>
+                <h2 style="font-weight: 800;">Select Mechanic</h2>
+            </div>
+            <span style="font-size: 12px; font-weight: bold; opacity: 0.8;">Step 2 of 2</span>
+        </div>
+        
+        <div style="display: flex; gap: 15px; margin-top: 20px;">
+            <div style="flex: 1; height: 8px; border-radius: 10px; background: rgba(255,255,255,0.2);"><div class="progress-fill-full"></div></div>
+            <div style="flex: 1; height: 8px; border-radius: 10px; background: rgba(255,255,255,0.2);"><div class="progress-fill-full"></div></div>
+        </div>
+    </div>
+
+    <div style="padding: 25px 20px;">
+        <h4 style="color: #64748b; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 20px;">Available Experts for <%= service_type %></h4>
+
+        <form action="/owner/confirm-booking" method="POST">
+            <!-- CRITICAL: Pass data from Step 1 via hidden inputs -->
+            <input type="hidden" name="vehicle_id" value="<%= vehicle_id %>">
+            <input type="hidden" name="service_type" value="<%= service_type %>">
+            <input type="hidden" name="scheduled_date" value="<%= scheduled_date %>">
+
+            <% mechanics.forEach((mech, index) => { %>
+                <label class="animate-fade-up" style="--delay: <%= (index + 1) * 0.1 %>;">
+                    <input type="radio" name="mechanic_id" value="<%= mech.id %>" class="mech-radio" required>
+                    <div class="mech-card">
+                        <div class="mech-avatar">
+                            <i data-lucide="wrench" size="28"></i>
+                        </div>
+                        <div style="flex: 1;">
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <h4 style="margin: 0; color: #1e293b;"><%= mech.full_name %></h4>
+                                <div class="rating-pill"><i data-lucide="star" size="10" fill="currentColor"></i> 4.9</div>
+                            </div>
+                            <span class="specialty-tag">Engine & Oil Specialist</span>
+                            <p style="font-size: 12px; color: #64748b; margin-top: 5px;"><i data-lucide="map-pin" size="12"></i> 2.4 km away</p>
+                        </div>
+                        <div class="check-mark"><i data-lucide="check" size="14"></i></div>
+                    </div>
+                </label>
+            <% }); %>
+
+            <!-- ACTION BUTTON -->
+            <button type="submit" class="btn-primary animate-fade-up" style="width: 100%; margin-top: 30px; padding: 20px; border-radius: 18px; font-size: 16px; box-shadow: 0 15px 30px rgba(249, 115, 22, 0.3); animation-delay: 0.5s;">
+                Confirm Booking <i data-lucide="check-circle" size="18" style="margin-left: 8px;"></i>
+            </button>
+        </form>
+    </div>
+
+    <script>
+        lucide.createIcons();
+    </script>
+</body>
+</html>

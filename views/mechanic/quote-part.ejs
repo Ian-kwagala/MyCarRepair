@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quote Part | MyCarRepair</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="stylesheet" href="/css/alerts.css">
+<script src="/js/alerts.js"></script>
+    <style>
+        /* Professional Animations */
+        @keyframes slideDown {
+            from { opacity: 0; transform: translateY(-30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes scaleIn {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
+        }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+        
+        .animate-header { animation: slideDown 0.6s cubic-bezier(0.16, 1, 0.3, 1); }
+        .animate-form { animation: fadeInUp 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.2s both; }
+        .animate-scale { animation: scaleIn 0.5s cubic-bezier(0.16, 1, 0.3, 1); }
+        
+        /* Gradient Header */
+        .gradient-header {
+            background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%);
+            padding: 30px 20px; color: white; border-radius: 0 0 30px 30px;
+            box-shadow: 0 10px 40px rgba(15, 23, 42, 0.3);
+            position: relative; overflow: hidden;
+        }
+        .gradient-header::before {
+            content: ''; position: absolute; top: -50%; right: -50%;
+            width: 200%; height: 200%; background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+            animation: pulse 3s ease-in-out infinite;
+        }
+        
+        /* Enhanced Photo Upload Box */
+        .photo-box {
+            border: 3px dashed #cbd5e1; border-radius: 24px; padding: 50px 30px;
+            text-align: center; color: #64748b; background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+            cursor: pointer; transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            position: relative; overflow: hidden;
+        }
+        .photo-box::before {
+            content: ''; position: absolute; inset: 0;
+            background: linear-gradient(135deg, rgba(249, 115, 22, 0.05) 0%, rgba(59, 130, 246, 0.05) 100%);
+            opacity: 0; transition: opacity 0.4s;
+        }
+        .photo-box:hover {
+            border-color: var(--action-orange); 
+            background: linear-gradient(135deg, #fff7ed 0%, #fef3c7 100%);
+            transform: translateY(-5px);
+            box-shadow: 0 15px 35px rgba(249, 115, 22, 0.15);
+        }
+        .photo-box:hover::before { opacity: 1; }
+        .photo-box.has-image {
+            border-color: #22c55e; border-style: solid;
+            background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+        }
+        
+        /* Photo Preview */
+        .photo-preview {
+            display: none; width: 100%; max-height: 200px; border-radius: 16px;
+            object-fit: cover; margin-top: 15px; box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+            animation: scaleIn 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        
+        /* Enhanced Price Input */
+        .price-input-group {
+            display: flex; align-items: center; background: white; 
+            border: 2px solid #e2e8f0; border-radius: 18px; padding: 0 20px;
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.02);
+        }
+        .price-input-group:focus-within {
+            border-color: var(--action-orange);
+            box-shadow: 0 8px 25px rgba(249, 115, 22, 0.15);
+            transform: translateY(-2px);
+        }
+        
+        /* Enhanced Input Group */
+        .input-group {
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .input-group:focus-within {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(59, 130, 246, 0.15);
+        }
+        
+        /* Submit Button Enhancement */
+        .btn-submit {
+            position: relative; overflow: hidden;
+            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .btn-submit::before {
+            content: ''; position: absolute; top: 50%; left: 50%;
+            width: 0; height: 0; border-radius: 50%;
+            background: rgba(255,255,255,0.3);
+            transform: translate(-50%, -50%);
+            transition: width 0.6s, height 0.6s;
+        }
+        .btn-submit:hover::before {
+            width: 300px; height: 300px;
+        }
+        .btn-submit:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 15px 40px rgba(249, 115, 22, 0.35);
+        }
+        .btn-submit:active {
+            transform: translateY(0);
+        }
+        
+        /* Loading State */
+        .btn-submit.loading {
+            pointer-events: none; opacity: 0.7;
+        }
+        .btn-submit.loading::after {
+            content: ''; position: absolute; width: 20px; height: 20px;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-top-color: white; border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-left: 10px;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        /* Form Field Spacing */
+        .form-field { margin-bottom: 25px; }
+        
+        /* Icon Animation */
+        .icon-bounce { animation: pulse 2s ease-in-out infinite; }
+    </style>
+</head>
+<body style="background: linear-gradient(to bottom, #f8fafc 0%, #e2e8f0 100%); padding-bottom: 40px; min-height: 100vh;">
+
+    <div class="gradient-header animate-header">
+        <div style="display: flex; align-items: center; gap: 15px; position: relative; z-index: 1;">
+            <button onclick="history.back()" style="background: rgba(255,255,255,0.15); border:none; color:white; padding: 10px; border-radius: 12px; transition: 0.3s; backdrop-filter: blur(10px);" onmouseover="this.style.background='rgba(255,255,255,0.25)'" onmouseout="this.style.background='rgba(255,255,255,0.15)'">
+                <i data-lucide="arrow-left"></i>
+            </button>
+            <div>
+                <h2 style="margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.5px;">Quote New Part</h2>
+                <p style="opacity: 0.8; font-size: 13px; margin-top: 5px; font-weight: 500;">Send for customer approval before purchase</p>
+            </div>
+        </div>
+    </div>
+
+    <div style="padding: 30px 20px;" class="animate-form">
+        <!-- CRITICAL: Use enctype for the photo upload -->
+        <form id="quoteForm" action="/mechanic/job/<%= jobId %>/quote" method="POST" enctype="multipart/form-data">
+            
+            <div class="form-field animate-scale" style="animation-delay: 0.3s;">
+                <label class="label-text" style="font-size: 11px; font-weight: 900; color: #64748b; letter-spacing: 1.5px;">PART NAME</label>
+                <div class="input-group">
+                    <i data-lucide="package" size="20" color="#94a3b8"></i>
+                    <input type="text" name="part_name" placeholder="" required style="font-weight: 600;">
+                </div>
+            </div>
+
+            <div class="form-field animate-scale" style="animation-delay: 0.4s;">
+                <label class="label-text" style="font-size: 11px; font-weight: 900; color: #64748b; letter-spacing: 1.5px;">ESTIMATED PRICE (UGX)</label>
+                <div class="price-input-group">
+                    <span style="font-weight: 900; color: var(--action-orange); margin-right: 10px; font-size: 16px;">UGX</span>
+                    <input type="number" name="price" placeholder="" required style="border: none; outline: none; width: 100%; padding: 18px 0; font-weight: 800; font-size: 20px; color: #0f172a;">
+                </div>
+            </div>
+
+            <div class="form-field animate-scale" style="animation-delay: 0.5s;">
+                <label class="label-text" style="font-size: 11px; font-weight: 900; color: #64748b; letter-spacing: 1.5px;">EVIDENCE PHOTO</label>
+                <label id="photoBox" class="photo-box" style="display: block;">
+                    <div style="position: relative; z-index: 1;">
+                        <i data-lucide="camera" size="40" style="margin-bottom: 15px; color: var(--action-orange);" class="icon-bounce"></i>
+                        <p style="font-weight: 700; font-size: 15px; margin-bottom: 5px; color: #1e293b;">Snap the worn-out part</p>
+                        <p style="font-size: 12px; opacity: 0.6;">Click to capture or upload</p>
+                    </div>
+                    <input type="file" id="photoInput" name="part_photo" accept="image/*" required style="display: none;">
+                    <img id="photoPreview" class="photo-preview" alt="Preview">
+                </label>
+            </div>
+
+            <button type="submit" class="btn-primary btn-submit animate-scale" style="width: 100%; margin-top: 40px; padding: 22px; border-radius: 18px; font-size: 17px; font-weight: 800; display: flex; align-items: center; justify-content: center; gap: 10px; animation-delay: 0.6s;">
+                <span>Send Quote to Owner</span>
+                <i data-lucide="send" size="20"></i>
+            </button>
+        </form>
+    </div>
+
+    <script>
+        lucide.createIcons();
+        
+        // Photo Upload Preview
+        const photoInput = document.getElementById('photoInput');
+        const photoBox = document.getElementById('photoBox');
+        const photoPreview = document.getElementById('photoPreview');
+        
+        photoInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    photoPreview.src = e.target.result;
+                    photoPreview.style.display = 'block';
+                    photoBox.classList.add('has-image');
+                }
+                reader.readAsDataURL(file);
+            }
+        });
+        
+        // Form Submit Loading State
+        const form = document.getElementById('quoteForm');
+        const submitBtn = form.querySelector('.btn-submit');
+        
+        form.addEventListener('submit', function(e) {
+            submitBtn.classList.add('loading');
+            submitBtn.querySelector('span').textContent = 'Sending Quote...';
+        });
+    </script>
+</body>
+</html>

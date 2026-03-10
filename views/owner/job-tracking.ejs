@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Track Job #<%= job.id %></title>
+    <link rel="stylesheet" href="/css/style.css">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <link rel="stylesheet" href="/css/alerts.css">
+    <script src="/js/alerts.js"></script>
+
+    <style>
+        .track-header { background: #0f172a; color: white; padding: 30px 20px; border-radius: 0 0 25px 25px; }
+        .id-badge { background: rgba(255,255,255,0.1); padding: 4px 10px; border-radius: 8px; font-size: 11px; font-family: monospace; }
+        
+        .check-row {
+            display: flex; align-items: center; gap: 12px; padding: 15px;
+            background: white; border-radius: 15px; margin-bottom: 10px;
+            border: 1.5px solid #e2e8f0; transition: 0.3s;
+        }
+        .check-row.done { border-color: #22c55e; background: #f0fdf4; }
+        .check-row i { color: #cbd5e1; }
+        .check-row.done i { color: #22c55e; }
+        
+        .checklist-grid {
+            display: flex; flex-direction: column; gap: 10px;
+        }
+        
+        .section-label { 
+            margin-bottom: 15px; color: #64748b; font-size: 12px; 
+            letter-spacing: 1px; font-weight: 900; 
+        }
+        
+        .pulse-loader {
+            width: 60px; height: 60px; margin: 0 auto;
+            border-radius: 50%; background: #3b82f6;
+            animation: pulse 2s ease-in-out infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 0.5; }
+            50% { transform: scale(1.1); opacity: 1; }
+        }
+        
+        @keyframes popIn {
+            0% { opacity: 0; transform: scale(0.95); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+        
+        .animate-pop-in {
+            animation: popIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        
+        .part-card {
+            transition: transform 0.2s ease;
+        }
+        
+        .part-card:hover {
+            transform: translateY(-2px);
+        }
+    </style>
+    
+</head>
+<body style="background: #f8fafc;">
+
+    <div class="track-header">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+            <button onclick="history.back()" style="background:none; border:none; color:white;"><i data-lucide="arrow-left"></i></button>
+            <span class="id-badge">JOB ID: <%= job.id %></span>
+        </div>
+        <h2 style="margin: 15px 0 5px 0;"><%= job.service_type %></h2>
+        <p style="opacity: 0.7; font-size: 13px;">Status: <strong id="live-status" style="color: var(--action-orange); text-transform: uppercase;"><%= job.status %></strong></p>
+    </div>
+
+    <div style="padding: 20px;">
+        <!-- TRACKING IDS FOR REFERENCE -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 25px;">
+            <div style="background: white; padding: 10px; border-radius: 12px; border: 1px solid #f1f5f9; font-size: 11px;">
+                <span style="color: #94a3b8;">OWNER ID:</span> <strong><%= job.owner_id %></strong>
+            </div>
+            <div style="background: white; padding: 10px; border-radius: 12px; border: 1px solid #f1f5f9; font-size: 11px;">
+                <span style="color: #94a3b8;">CAR ID:</span> <strong><%= job.car_id %></strong>
+            </div>
+        </div>
+
+        <!-- SECTION: LIVE CHECKLIST (Always visible in History or Active) -->
+        <% if (job.status === 'fixing' || job.status === 'diagnosing' || job.status === 'completed') { %>
+            <h4 class="section-label">SERVICE CHECKLIST</h4>
+            <div id="checklist-container" style="margin-bottom: 30px;">
+                <% if (checklist.length === 0) { %>
+                    <p style="font-size: 13px; color: #94a3b8;">Checklist will appear once mechanic verifies the problem.</p>
+                <% } else { %>
+                    <% checklist.forEach(item => { %>
+                        <div class="check-row <%= item.is_completed ? 'done' : '' %>" id="task-<%= item.id %>">
+                            <i data-lucide="<%= item.is_completed ? 'check-circle' : 'circle' %>" size="20"></i>
+                            <span style="font-weight: 600; font-size: 14px;"><%= item.task_description %></span>
+                        </div>
+                    <% }) %>
+                <% } %>
+            </div>
+        <% } else { %>
+            <!-- Placeholder while mechanic is driving -->
+            <div style="text-align: center; padding: 40px; margin-bottom: 30px;">
+                <div class="pulse-loader"></div>
+                <p style="color: #64748b; margin-top: 15px; font-weight: 600;">
+                    Mechanic is currently <%= job.status === 'accepted' ? 'en route' : 'inspecting the car' %>.
+                    <br><small style="font-weight: 400;">Checklist will appear once the problem is verified.</small>
+                </p>
+            </div>
+        <% } %>
+
+        <!-- SECTION: PARTS APPROVAL (Solves Problem #1) -->
+        <h4 class="section-label">PARTS & QUOTES EVIDENCE</h4>
+        <div id="parts-container" style="margin-bottom: 30px;">
+            <% if (parts.length === 0) { %>
+                <p style="font-size: 13px; color: #94a3b8; text-align: center; padding: 20px;">No parts quoted yet.</p>
+            <% } else { %>
+                <% parts.forEach(part => { %>
+                    <div class="part-card animate-pop-in" style="background: white; border: 1.5px solid #e2e8f0; border-radius: 20px; padding: 15px; margin-bottom: 15px; overflow: hidden;">
+                        
+                        <div style="display: flex; gap: 15px;">
+                            <!-- PHOTO EVIDENCE BOX -->
+                            <div style="width: 90px; height: 90px; background: #f1f5f9; border-radius: 12px; overflow: hidden; border: 1px solid #e2e8f0;">
+                                <% if(part.photo_evidence) { %>
+                                    <img src="<%= part.photo_evidence %>" style="width: 100%; height: 100%; object-fit: cover; cursor: pointer;" onclick="window.open(this.src)">
+                                <% } else { %>
+                                    <div style="display: flex; align-items: center; justify-content: center; height: 100%; color: #cbd5e1;">
+                                        <i data-lucide="image-off"></i>
+                                    </div>
+                                <% } %>
+                            </div>
+
+                            <div style="flex: 1;">
+                                <span style="font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase;">Part Quoted</span>
+                                <h4 style="margin: 2px 0; color: #1e293b;"><%= part.part_name %></h4>
+                                <p style="color: var(--action-orange); font-weight: 800; font-size: 16px; margin: 4px 0;">
+                                    UGX <%= (Number(part.price)).toLocaleString() %>
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- APPROVAL ACTION BAR -->
+                        <div style="margin-top: 15px; padding-top: 15px; border-top: 1px dashed #f1f5f9; display: flex; justify-content: flex-end;">
+                            <% if (!part.is_approved && job.status !== 'completed') { %>
+                                <button onclick="approvePart('<%= part.id %>', '<%= job.id %>')" class="btn-primary" style="padding: 10px 25px; font-size: 13px; border-radius: 10px; box-shadow: 0 4px 10px rgba(249, 115, 22, 0.2);">
+                                    Approve & Authorize
+                                </button>
+                            <% } else { %>
+                                <div style="display: flex; align-items: center; gap: 5px; color: #22c55e; font-weight: 800; font-size: 12px;">
+                                    <i data-lucide="check-circle" size="16"></i> AUTHORIZED
+                                </div>
+                            <% } %>
+                        </div>
+                    </div>
+                <% }) %>
+            <% } %>
+        </div>
+
+        <!-- SECTION: RECEIPT (Solves Problem #2) -->
+        <% if (job.status === 'completed') { %>
+            <div class="receipt-card animate-pop-in" style="background: #0f172a; color: white; padding: 25px; border-radius: 25px;">
+                <div style="text-align: center; margin-bottom: 20px;">
+                    <i data-lucide="file-text" size="40" color="var(--action-orange)"></i>
+                    <h3 style="margin-top: 10px;">OFFICIAL RECEIPT</h3>
+                    <p style="font-size: 11px; opacity: 0.5;">JOB ID: #<%= job.id %> • CAR ID: <%= job.car_id %></p>
+                </div>
+
+                <div style="border-top: 1px dashed rgba(255,255,255,0.2); padding-top: 15px;">
+                    <div style="display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 10px;">
+                        <span>Mechanic Fee:</span>
+                        <strong>UGX <%= mechanicFee.toLocaleString() %></strong>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 10px;">
+                        <span>Approved Parts:</span>
+                        <strong>UGX <%= (finalTotal - mechanicFee).toLocaleString() %></strong>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 15px; margin-top: 10px;">
+                        <span style="font-size: 18px; font-weight: 800;">TOTAL PAID:</span>
+                        <strong style="font-size: 18px; color: var(--action-orange);">UGX <%= finalTotal.toLocaleString() %></strong>
+                    </div>
+                </div>
+                
+                <a href="/receipts/receipt-<%= job.id %>.pdf" target="_blank" style="display: block; text-align: center; margin-top: 20px; color: var(--action-orange); font-weight: 700; text-decoration: none;">
+                    Download PDF Copy
+                </a>
+            </div>
+        <% } %>
+    </div>
+
+    <script>
+        lucide.createIcons();
+        const socket = io();
+
+        // MEANINGFUL COMMENT: Listen for live updates from the Mechanic
+        socket.on('task_update', (data) => {
+            if(data.jobId == '<%= job.id %>') {
+                // 1. Update the status indicator
+                document.getElementById('live-status').innerText = "Updated";
+                
+                // 2. Find the specific checklist item and mark it done
+                // Note: You would typically send the taskId from the server
+                // This is a simple version that refreshes the checkmark
+                location.reload(); 
+            }
+        });
+        
+        async function approvePart(partId, jobId) {
+            // Log to console so you can see if the function is even triggering
+            console.log("Button clicked for Part ID:", partId);
+
+            AppAlert.confirm("Confirm Purchase", "Do you authorize this part?", async () => {
+                const response = await fetch('/api/owner/approve-part', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ partId, jobId })
+                });
+                const res = await response.json();
+                if(res.success) location.reload();
+            });
+        }
+    </script>
+</body>
+</html>

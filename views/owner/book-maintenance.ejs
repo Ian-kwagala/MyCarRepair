@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Book Maintenance | MyCarRepair</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="stylesheet" href="/css/alerts.css">
+<script src="/js/alerts.js"></script>
+    <style>
+        /* UNIQUE STYLING FOR THIS PAGE */
+        .animate-fade-up {
+            animation: fadeUp 0.6s cubic-bezier(0.23, 1, 0.32, 1) both;
+        }
+
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Staggered animation delays for the cards */
+        .delay-1 { animation-delay: 0.1s; }
+        .delay-2 { animation-delay: 0.2s; }
+        .delay-3 { animation-delay: 0.3s; }
+        .delay-4 { animation-delay: 0.4s; }
+
+        .service-card {
+            position: relative;
+            background: white;
+            border: 2px solid #e2e8f0;
+            border-radius: 18px;
+            padding: 25px 15px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .service-card i {
+            transition: transform 0.3s ease;
+            color: #64748b;
+        }
+
+        /* Hidden Radio Button Logic */
+        .service-radio { display: none; }
+
+        .service-radio:checked + .service-card {
+            border-color: var(--action-orange);
+            background: #fff7ed;
+            box-shadow: 0 10px 15px -3px rgba(249, 115, 22, 0.1);
+            transform: scale(1.03);
+        }
+
+        .service-radio:checked + .service-card i {
+            color: var(--action-orange);
+            transform: scale(1.2);
+        }
+
+        .service-radio:checked + .service-card span {
+            color: var(--action-orange);
+            font-weight: 700;
+        }
+
+        /* Progress Bar Upgrade */
+        .progress-container {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-top: 20px;
+        }
+        .progress-step {
+            flex: 1;
+            height: 8px;
+            border-radius: 10px;
+            background: rgba(255,255,255,0.2);
+            overflow: hidden;
+        }
+        .progress-fill {
+            width: 50%; /* Step 1 */
+            height: 100%;
+            background: var(--action-orange);
+            border-radius: 10px;
+            box-shadow: 0 0 10px var(--action-orange);
+        }
+
+        /* Input Styling */
+        .custom-select-group {
+            background: white;
+            border: 1.5px solid #e2e8f0;
+            border-radius: 14px;
+            padding: 5px 15px;
+            display: flex;
+            align-items: center;
+            margin-top: 10px;
+        }
+        .custom-select-group select, .custom-select-group input {
+            border: none;
+            outline: none;
+            width: 100%;
+            padding: 12px;
+            font-size: 15px;
+            background: transparent;
+        }
+    </style>
+</head>
+
+
+<body style="background: #f8fafc; padding-bottom: 40px;">
+
+    <div style="background: var(--primary-blue); padding: 35px 20px; color: white; border-radius: 0 0 30px 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.1);">
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+            <div style="display: flex; align-items: center; gap: 15px;">
+                <a href="/owner/dashboard" style="color: white; background: rgba(255,255,255,0.1); padding: 8px; border-radius: 12px; display: flex;"><i data-lucide="arrow-left" size="20"></i></a>
+                <h2 style="font-weight: 800; letter-spacing: -0.5px;">Book Maintenance</h2>
+            </div>
+            <span style="font-size: 12px; font-weight: bold; opacity: 0.8;">Step 1 of 2</span>
+        </div>
+        
+        <div class="progress-container">
+            <div class="progress-step"><div class="progress-fill"></div></div>
+            <div class="progress-step"></div>
+        </div>
+    </div>
+
+    <div style="padding: 25px 20px;">
+        <form action="/owner/select-mechanic" method="POST">
+            <div class="animate-fade-up delay-1">
+                <label class="label-text" style="color: #64748b; font-weight: 700; font-size: 12px; text-transform: uppercase; letter-spacing: 1px;">Select Your Vehicle</label>
+                <div class="input-box">
+                    <i data-lucide="car" size="18" color="#94a3b8"></i>
+                    <select name="vehicle_id" required style="width: 100%; border: none; background: transparent; font-weight: 700;">
+                        <% if (cars.length === 0) { %>
+                            <option disabled selected>Please add a car in your garage first</option>
+                        <% } else { %>
+                            <!-- If only 1 car, this option becomes 'selected' automatically -->
+                            <% cars.forEach(car => { %>
+                                <option value="<%= car.id %>" <%= cars.length === 1 ? 'selected' : '' %>>
+                                    <%= car.make %> <%= car.model %> (<%= car.plate_number %>)
+                                </option>
+                            <% }); %>
+                        <% } %>
+                    </select>
+                </div>
+            </div>
+
+            <div style="margin-top: 30px;">
+                <label class="label-text" style="color: #64748b; font-weight: 700; font-size: 12px; text-transform: uppercase; letter-spacing: 1px;">Service Type</label>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 10px;">
+                    
+                    <label class="animate-fade-up delay-1">
+                        <input type="radio" name="service_type" value="Oil Change" class="service-radio" checked>
+                        <div class="service-card">
+                            <i data-lucide="droplets" size="28"></i>
+                            <span style="font-size: 14px;">Oil Change</span>
+                        </div>
+                    </label>
+
+                    <label class="animate-fade-up delay-2">
+                        <input type="radio" name="service_type" value="Brake Repair" class="service-radio">
+                        <div class="service-card">
+                            <i data-lucide="circle-slash" size="28"></i>
+                            <span style="font-size: 14px;">Brakes</span>
+                        </div>
+                    </label>
+
+                    <label class="animate-fade-up delay-3">
+                        <input type="radio" name="service_type" value="General Service" class="service-radio">
+                        <div class="service-card">
+                            <i data-lucide="settings-2" size="28"></i>
+                            <span style="font-size: 14px;">General</span>
+                        </div>
+                    </label>
+
+                    <label class="animate-fade-up delay-4">
+                        <input type="radio" name="service_type" value="Tyre Rotation" class="service-radio">
+                        <div class="service-card">
+                            <i data-lucide="refresh-cw" size="28"></i>
+                            <span style="font-size: 14px;">Tyres</span>
+                        </div>
+                    </label>
+
+                </div>
+            </div>
+
+            <div class="animate-fade-up delay-4" style="margin-top: 30px;">
+                <label class="label-text" style="color: #64748b; font-weight: 700; font-size: 12px; text-transform: uppercase; letter-spacing: 1px;">Preferred Date</label>
+                <div class="custom-select-group">
+                    <i data-lucide="calendar-days" size="20" color="#94a3b8"></i>
+                    <input type="date" name="scheduled_date" required>
+                </div>
+            </div>
+
+            <button type="submit" class="btn-primary animate-fade-up delay-4" style="width: 100%; margin-top: 40px; padding: 20px; border-radius: 18px; font-size: 16px; box-shadow: 0 15px 30px rgba(249, 115, 22, 0.3);">
+                Find Available Mechanics <i data-lucide="search" size="18" style="margin-left: 8px;"></i>
+            </button>
+        </form>
+    </div>
+
+    <script>
+        lucide.createIcons();
+    </script>
+</body>
+</html>

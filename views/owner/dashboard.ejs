@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard | MyCarRepair</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="/css/alert.css">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/js/alert.js"></script>
+    <style>
+        /* PROFESSIONAL ANIMATIONS */
+        @keyframes slideFadeUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-item { animation: slideFadeUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) both; }
+        .delay-1 { animation-delay: 0.1s; }
+        .delay-2 { animation-delay: 0.2s; }
+        .delay-3 { animation-delay: 0.3s; }
+        .delay-4 { animation-delay: 0.4s; }
+
+        .header-gradient {
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            color: white;
+            padding: 40px 20px 30px 20px;
+            border-radius: 0 0 35px 35px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+
+        .action-card {
+            border-radius: 20px;
+            padding: 22px;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+            position: relative;
+            overflow: hidden;
+        }
+        .action-card:active { transform: scale(0.96); }
+
+        .profile-trigger {
+            background: rgba(255,255,255,0.1);
+            padding: 10px;
+            border-radius: 15px;
+            border: 1px solid rgba(255,255,255,0.1);
+            transition: 0.3s;
+        }
+        .profile-trigger:hover { background: rgba(255,255,255,0.2); }
+    </style>
+</head>
+<body style="background: #f8fafc; padding-bottom: 90px;">
+
+    <!-- DYNAMIC HEADER -->
+    <header class="header-gradient animate-item">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+            <div>
+                <p id="dynamic-greeting" style="opacity: 0.7; font-size: 14px; font-weight: 500;">Good morning 👋</p>
+                <h2 style="font-size: 26px; font-weight: 800; margin: 4px 0;"><%= userName %></h2>
+            </div>
+            <!-- Profile Icon Link -->
+            <a href="/owner/profile" class="profile-trigger">
+                <i data-lucide="user-circle" size="24" color="white"></i>
+            </a>
+        </div>
+        
+        <div style="margin-top: 20px; display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.05); padding: 12px 15px; border-radius: 16px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <i data-lucide="map-pin" size="14" color="var(--action-orange)"></i>
+                <span id="current-location" style="font-size: 12px; opacity: 0.8; font-weight: 600;">Detecting location...</span>
+            </div>
+            <div style="font-size: 12px; font-weight: 800; color: var(--action-orange); letter-spacing: 1px;" id="live-clock">
+                00:00:00
+            </div>
+        </div>
+    </header>
+
+    <div style="padding: 25px 20px;">
+        <h4 style="color: #64748b; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 15px;">What do you need today?</h4>
+        
+        <!-- GRID LAYOUT -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+            
+            <!-- EMERGENCY SOS -->
+            <div onclick="location.href='./sos'" class="action-card animate-item delay-1" style="grid-column: span 2; background: #ef4444; color: white;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <i data-lucide="alert-circle" size="24" style="margin-bottom: 10px;"></i>
+                        <h4 style="font-size: 18px;">Emergency SOS</h4>
+                        <p style="font-size: 12px; opacity: 0.9;">Towing, flat tire, battery jump</p>
+                    </div>
+                    <i data-lucide="chevron-right" size="20" opacity="0.5"></i>
+                </div>
+            </div>
+
+            <!-- BOOK MAINTENANCE -->
+            <div onclick="location.href='/owner/book-maintenance'" class="action-card animate-item delay-2" style="background: white; border: 1px solid #e2e8f0;">
+                <i data-lucide="calendar" size="24" color="#1e293b"></i>
+                <h4 style="margin-top: 12px; color: #1e293b;">Book Service</h4>
+                <p style="font-size: 11px; color: #64748b;">Oil change, tune-up</p>
+            </div>
+
+            <!-- DIAGNOSTICS -->
+            <div onclick="location.href='/owner/diagnostics'" class="action-card animate-item delay-3" style="background: white; border: 1px solid #e2e8f0;">
+                <i data-lucide="activity" size="24" color="#1e293b"></i>
+                <h4 style="margin-top: 12px; color: #1e293b;">Diagnostics</h4>
+                <p style="font-size: 11px; color: #64748b;">Engine check, codes</p>
+            </div>
+
+            <!-- SPARE PARTS -->
+            <div class="action-card animate-item delay-4" style="grid-column: span 2; background: #f97316; color: white;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <i data-lucide="package" size="24" style="margin-bottom: 10px;"></i>
+                        <h4 style="font-size: 18px;">Spare Parts</h4>
+                        <p style="font-size: 12px; opacity: 0.9;">OEM & aftermarket accessories</p>
+                    </div>
+                    <i data-lucide="chevron-right" size="20" opacity="0.5"></i>
+                </div>
+            </div>
+        </div>
+
+        <!-- MY GARAGE -->
+        <div style="margin-top: 35px;" class="animate-item delay-4">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <h4 style="color: #1e293b; font-weight: 800;">My Garage</h4>
+                <a href="/owner/add-car" style="color: #f97316; font-size: 13px; font-weight: 800; text-decoration: none;">+ ADD CAR</a>
+            </div>
+            
+            <% if (cars && cars.length > 0) { %>
+                <% cars.forEach(car => { %>
+                    <div onclick="location.href='/owner/car/<%= car.id %>'" style="background: white; border-radius: 20px; padding: 12px; display: flex; align-items: center; border: 1px solid #e2e8f0; margin-bottom: 12px;">
+                        <div style="width: 50px; height: 50px; background: #f1f5f9; border-radius: 12px; display: flex; align-items: center; justify-content: center; margin-right: 15px;">
+                            <i data-lucide="car" color="#64748b"></i>
+                        </div>
+                        <div style="flex: 1;">
+                            <h5 style="margin: 0; color: #1e293b;"><%= car.make %> <%= car.model %></h5>
+                            <p style="font-size: 12px; color: #94a3b8;"><%= car.plate_number %> • <%= car.transmission %></p>
+                        </div>
+                        <i data-lucide="chevron-right" size="18" color="#cbd5e1"></i>
+                    </div>
+                <% }); %>
+            <% } else { %>
+                <div style="padding: 30px; border: 2px dashed #e2e8f0; border-radius: 20px; text-align: center; color: #94a3b8;">
+                    <i data-lucide="image" size="32" style="margin-bottom: 10px;"></i>
+                    <p style="font-size: 13px;">No vehicles found</p>
+                </div>
+            <% } %>
+        </div>
+    </div>
+
+    <!-- BOTTOM NAVIGATION (Cleaned up) -->
+    <nav class="bottom-nav">
+        <a href="/owner/dashboard" class="nav-item active">
+            <i data-lucide="layout-dashboard"></i>
+            <span>Dashboard</span>
+        </a>
+        <a href="/owner/activity" class="nav-item">
+            <i data-lucide="clock"></i>
+            <span>Activity</span>
+        </a>
+        <a href="/logout" class="nav-item">
+            <i data-lucide="log-out"></i>
+            <span>Logout</span>
+        </a>
+    </nav>
+
+    <script>
+        lucide.createIcons();
+        const socket = io();
+        const currentUserId = '<%= userId %>';
+
+        // Socket listener for when mechanic accepts job
+        socket.on('job_taken', (data) => {
+            if (data.ownerId == currentUserId) {
+                AppAlert.show(
+                    "Mechanic Found!", 
+                    `${data.mechanicName} is on the way to help you.`, 
+                    "success",
+                    () => { location.href = '/owner/track-job/' + data.jobId; }
+                );
+            }
+        });
+
+        // 1. DYNAMIC GREETING & CLOCK
+        function updateStatus() {
+            const now = new Date();
+            const hours = now.getHours();
+            let greeting = "Good evening 🌙";
+            if (hours < 12) greeting = "Good morning ☀️";
+            else if (hours < 18) greeting = "Good afternoon 🌤️";
+            
+            document.getElementById('dynamic-greeting').innerText = greeting;
+            document.getElementById('live-clock').innerText = now.toLocaleTimeString('en-GB');
+        }
+        setInterval(updateStatus, 1000);
+        updateStatus();
+
+        // 2. REAL-TIME LOCATION
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(position => {
+                // For a real app, you'd use a Reverse Geocoding API here.
+                // For now, let's show they are in the detected city area.
+                document.getElementById('current-location').innerText = "Kampala Central, Uganda";
+            }, () => {
+                document.getElementById('current-location').innerText = "Kampala, Uganda";
+            });
+        }
+    </script>
+</body>
+</html>

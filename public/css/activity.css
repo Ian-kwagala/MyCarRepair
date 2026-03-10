@@ -1,0 +1,115 @@
+/* ACTIVITY PAGE STYLES */
+.activity-container {
+    padding: 25px 20px;
+    animation: fadeIn 0.5s ease-in;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; } to { opacity: 1; }
+}
+
+/* Tab Switching */
+.tab-header {
+    display: flex;
+    background: #e2e8f0;
+    padding: 5px;
+    border-radius: 14px;
+    margin-bottom: 25px;
+}
+
+.tab-btn {
+    flex: 1;
+    padding: 12px;
+    border: none;
+    border-radius: 10px;
+    font-weight: 800;
+    font-size: 12px;
+    cursor: pointer;
+    background: transparent;
+    color: #64748b;
+    transition: 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.tab-btn.active {
+    background: white;
+    color: #1e293b;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+}
+
+/* Job Cards */
+.activity-card {
+    background: white;
+    border-radius: 22px;
+    padding: 20px;
+    margin-bottom: 18px;
+    border: 1.5px solid #e2e8f0;
+    transition: 0.3s ease;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+}
+
+.activity-card:active { transform: scale(0.97); }
+
+/* Status Badges */
+.status-badge {
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-size: 10px;
+    font-weight: 900;
+    text-transform: uppercase;
+}
+
+.status-completed { background: #dcfce7; color: #15803d; }
+.status-pending { background: #fef3c7; color: #b45309; }
+.status-accepted { background: #dbeafe; color: #1d4ed8; }
+.status-diagnosing { background: #e9d5ff; color: #7c3aed; }
+.status-fixing { background: #dbeafe; color: #1d4ed8; }
+.status-completed { background: #dcfce7; color: #15803d; }
+.status-emergency { background: #fee2e2; color: #b91c1c; }
+
+.time-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: #94a3b8;
+    display: block;
+    margin-bottom: 5px;
+}
+
+/* Date Group Headers */
+.date-header {
+    font-size: 11px;
+    font-weight: 900;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin: 25px 0 15px 5px;
+}
+
+.date-header:first-child {
+    margin-top: 0;
+}
+/* En-route banner with truck animation */
+.en-route-banner {
+    margin-top: 12px;
+    padding: 10px 14px;
+    background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #1d4ed8;
+}
+
+@keyframes truckBounce {
+    0%, 100% { transform: translateX(0) translateY(0); }
+    25% { transform: translateX(2px) translateY(-2px); }
+    50% { transform: translateX(0) translateY(0); }
+    75% { transform: translateX(-2px) translateY(-2px); }
+}
+
+.truck-bounce {
+    animation: truckBounce 0.6s ease-in-out infinite;
+}

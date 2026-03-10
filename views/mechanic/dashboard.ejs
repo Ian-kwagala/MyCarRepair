@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mechanic Portal | MyCarRepair</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="/css/alert.css">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/js/alert.js"></script>
+    <style>
+        /* MECHANIC-SPECIFIC STYLING */
+        @keyframes slideInRight {
+            from { opacity: 0; transform: translateX(30px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        .animate-card { animation: slideInRight 0.5s cubic-bezier(0.16, 1, 0.3, 1) both; }
+        
+        .mech-header {
+            background: #0f172a; color: white; padding: 30px 20px;
+            border-radius: 0 0 30px 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .stat-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-top: 20px; }
+        .stat-pill-dark {
+            background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+            padding: 12px; border-radius: 16px; text-align: center;
+        }
+
+        /* Duty Toggle Button */
+        .duty-status {
+            display: flex; align-items: center; gap: 8px; padding: 6px 14px;
+            border-radius: 20px; font-size: 12px; font-weight: 800; border: none; cursor: pointer;
+            transition: 0.3s;
+        }
+        .online { background: #22c55e; color: white; box-shadow: 0 0 15px rgba(34, 197, 94, 0.4); }
+        .offline { background: #64748b; color: white; }
+
+        /* Job Tabs */
+        .tab-bar {
+            display: flex; gap: 10px; margin: 20px 0; background: #e2e8f0;
+            padding: 5px; border-radius: 14px;
+        }
+        .tab-item {
+            flex: 1; padding: 10px; border: none; border-radius: 10px;
+            font-size: 13px; font-weight: 700; color: #64748b; cursor: pointer; transition: 0.3s;
+        }
+        .tab-item.active { background: white; color: var(--primary-blue); box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
+
+        .job-card-mech {
+            background: white; border-radius: 20px; padding: 20px; margin-bottom: 15px;
+            border: 1px solid #e2e8f0; position: relative; overflow: hidden;
+        }
+        .price-tag { color: var(--action-orange); font-weight: 800; font-size: 16px; }
+    </style>
+</head>
+
+<body style="background: #f8fafc; padding-bottom: 100px;">
+
+    <!-- TOP HEADER -->
+    <header class="mech-header">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+            <div>
+                <p style="opacity: 0.6; font-size: 12px; font-weight: 600;">Mechanic Portal</p>
+                <h2 style="font-size: 24px; font-weight: 800; margin-top: 5px;"><%= userName %></h2>
+            </div>
+            <button id="duty-toggle" class="duty-status online" onclick="toggleDuty()">
+                <i data-lucide="power" size="14"></i> <span id="status-text">Online</span>
+            </button>
+        </div>
+
+        <!-- REVENUE STATS -->
+        <div class="stat-grid">
+            <div class="stat-pill-dark animate-item">
+                <p style="font-size: 10px; opacity: 0.5;">TODAY</p>
+                <strong style="font-size: 14px;">UGX <span id="stat-today">0</span></strong>
+            </div>
+            <div class="stat-pill-dark animate-item delay-1">
+                <p style="font-size: 10px; opacity: 0.5;">THIS WEEK</p>
+                <strong style="font-size: 14px;">UGX <span id="stat-week">0.0M</span></strong>
+            </div>
+            <div class="stat-pill-dark animate-item delay-2">
+                <p style="font-size: 10px; opacity: 0.5;">TOTAL JOBS</p>
+                <strong style="font-size: 14px; color: #22c55e;"><span id="stat-count">0</span></strong>
+            </div>
+        </div>
+    </header>
+
+    <div style="padding: 0 20px;">
+        <!-- TAB NAVIGATION -->
+        <div class="tab-bar">
+            <button class="tab-item active" onclick="switchTab('new', 0)">New <span id="count-new-badge" style="background: var(--action-orange); color: white; padding: 2px 6px; border-radius: 6px; font-size: 10px;">0</span></button>
+            <button class="tab-item" onclick="switchTab('active', 1)">Active <span id="count-active-badge" style="background: #3b82f6; color: white; padding: 2px 6px; border-radius: 6px; font-size: 10px;">0</span></button>
+            <button class="tab-item" onclick="switchTab('done', 2)">History</button>
+        </div>
+
+        <!-- DYNAMIC JOB SECTIONS -->
+        <div id="job-sections">
+            <!-- This container will be filled dynamically with Today/Yesterday/Older groups -->
+        </div>
+    </div>
+
+    <!-- MECHANIC BOTTOM NAV -->
+    <nav class="bottom-nav">
+        <a href="/mechanic/dashboard" class="nav-item active">
+            <i data-lucide="layout-grid"></i>
+            <span>Jobs</span>
+        </a>
+        <a href="#" class="nav-item">
+            <i data-lucide="wallet"></i>
+            <span>Earnings</span>
+        </a>
+        <a href="/logout" class="nav-item">
+            <i data-lucide="log-out"></i>
+            <span>Logout</span>
+        </a>
+    </nav>
+
+    <!-- PARTS APPROVAL MODAL -->
+    <div id="quote-modal" class="modal-overlay" style="display: none; align-items: flex-end; padding: 0;">
+        <div class="animate-slide-up" style="background: white; width: 100%; padding: 30px 20px; border-radius: 30px 30px 0 0;">
+            <h3 style="margin-bottom: 5px;">Part Approval Needed</h3>
+            <p style="color: #64748b; font-size: 13px; margin-bottom: 25px;">Your mechanic says this part needs replacement.</p>
+            
+            <div style="display: flex; gap: 15px; background: #f8fafc; padding: 15px; border-radius: 15px; border: 1px solid #e2e8f0;">
+                <div id="quote-photo" style="width: 80px; height: 80px; background: #cbd5e1; border-radius: 10px; overflow: hidden;">
+                    <!-- Image filled via JS -->
+                </div>
+                <div style="flex: 1;">
+                    <h4 id="quote-name" style="margin: 0;">Brake Pads</h4>
+                    <p id="quote-price" style="color: var(--action-orange); font-weight: 800; font-size: 18px; margin-top: 5px;">UGX 85,000</p>
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 10px; margin-top: 30px;">
+                <button onclick="respondQuote('reject')" class="btn-outline" style="flex: 1; border-color: #fecaca; color: #ef4444;">Reject</button>
+                <button onclick="respondQuote('approve')" class="btn-primary" style="flex: 2;">Approve & Purchase</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- RATING & COMPLETION MODAL -->
+    <div id="finish-modal" class="modal-overlay" style="display: none; align-items: center;">
+        <div class="animate-pop-in" style="background: white; width: 90%; max-width: 400px; padding: 35px; border-radius: 30px; text-align: center;">
+            <div style="color: #22c55e;"><i data-lucide="check-circle" size="64"></i></div>
+            <h2 style="margin-top: 20px;">Service Complete!</h2>
+            <p style="color: #64748b; margin-top: 10px;">Your car is ready for pickup.</p>
+            
+            <h3 id="final-total" style="font-size: 28px; margin: 20px 0; color: var(--primary-blue);">UGX 135,000</h3>
+
+            <a id="receipt-link" href="#" target="_blank" class="btn-outline" style="display: block; text-decoration: none; margin-bottom: 25px;">
+                <i data-lucide="file-text" size="18"></i> Download PDF Receipt
+            </a>
+
+            <p class="label-text">RATE YOUR MECHANIC</p>
+            <div style="display: flex; justify-content: center; gap: 10px; margin: 15px 0;">
+                <i data-lucide="star" class="star-rating" onclick="setRating(1)"></i>
+                <i data-lucide="star" class="star-rating" onclick="setRating(2)"></i>
+                <i data-lucide="star" class="star-rating" onclick="setRating(3)"></i>
+                <i data-lucide="star" class="star-rating" onclick="setRating(4)"></i>
+                <i data-lucide="star" class="star-rating" onclick="setRating(5)"></i>
+            </div>
+
+            <button onclick="closeFinishModal()" class="btn-primary" style="width: 100%; border-radius: 15px;">Finish & Close</button>
+        </div>
+    </div>
+
+    <style>
+        .star-rating { color: #cbd5e1; cursor: pointer; transition: 0.2s; }
+        .star-rating.active { color: #fbbf24; fill: #fbbf24; transform: scale(1.2); }
+    </style>
+
+    <script>
+        lucide.createIcons();
+        const socket = io();
+
+        // 1. ONLINE/OFFLINE TOGGLE
+        let isOnline = true;
+        function toggleDuty() {
+            isOnline = !isOnline;
+            const btn = document.getElementById('duty-toggle');
+            const text = document.getElementById('status-text');
+            
+            if (isOnline) {
+                btn.className = "duty-status online";
+                text.innerText = "Online";
+                socket.emit('mechanic_online');
+            } else {
+                btn.className = "duty-status offline";
+                text.innerText = "Offline";
+                socket.emit('mechanic_offline');
+            }
+        }
+
+        let currentTab = 'new';
+
+        // 2. TAB SWITCHING LOGIC
+        function switchTab(type, index) {
+            currentTab = type;
+            const tabs = document.querySelectorAll('.tab-item');
+            tabs.forEach(t => t.classList.remove('active'));
+            tabs[index].classList.add('active');
+            
+            refreshDashboard(); // Reload jobs for the selected tab
+        }
+
+        // Listen for the quote from the mechanic
+        socket.on('new_quote_alert', (data) => {
+            // Only show if it belongs to this owner
+            if (data.ownerId == '<%= userId %>') {
+                document.getElementById('quote-name').innerText = data.partName;
+                document.getElementById('quote-price').innerText = "UGX " + data.price;
+                document.getElementById('quote-modal').style.display = 'flex';
+                
+                // Play a notification sound
+                new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3').play();
+            }
+        });
+
+        function respondQuote(decision) {
+            // Close modal and notify server
+            document.getElementById('quote-modal').style.display = 'none';
+            socket.emit('quote_response', { decision: decision });
+            alert(decision === 'approve' ? "Part approved! Repair will continue." : "Part rejected.");
+        }
+
+        // Listen for job finished event
+        socket.on('job_finished', (data) => {
+            if (data.ownerId == '<%= userId %>') {
+                document.getElementById('final-total').innerText = "UGX " + data.total.toLocaleString();
+                document.getElementById('receipt-link').href = data.receiptUrl;
+                document.getElementById('finish-modal').style.display = 'flex';
+                
+                // Success sound
+                new Audio('https://assets.mixkit.co/active_storage/sfx/1435/1435-preview.mp3').play();
+            }
+        });
+
+        function setRating(n) {
+            const stars = document.querySelectorAll('.star-rating');
+            stars.forEach((s, i) => {
+                i < n ? s.classList.add('active') : s.classList.remove('active');
+            });
+        }
+
+        function closeFinishModal() {
+            document.getElementById('finish-modal').style.display = 'none';
+            location.reload(); // Refresh to clear the active job bar
+        }
+
+        // 3. Listen for real-time job updates
+        socket.on('new_job_pushed', (job) => {
+            if(isOnline && currentTab === 'new') {
+                refreshDashboard(); // Refresh to show new job
+                new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3').play();
+            }
+        });
+
+        // 3. Load all jobs on page load
+        window.onload = async () => {
+            await refreshDashboard();
+        };
+
+        function acceptJob(jobId) {
+            socket.emit('accept_job', { jobId });
+            
+            AppAlert.show(
+                "Job Accepted!", 
+                "Please drive safely to the owner's location. Contact them if you need directions.", 
+                "success"
+            );
+            refreshDashboard();
+        }
+
+        async function refreshDashboard() {
+            try {
+                const res = await fetch('/api/mechanic/all-jobs');
+                const data = await res.json();
+                
+                // Update badge counts
+                const pendingCount = Object.values(data.pending).flat().length;
+                const activeCount = Object.values(data.active).flat().length;
+                
+                document.getElementById('count-new-badge').innerText = pendingCount;
+                document.getElementById('count-active-badge').innerText = activeCount;
+                
+                // Update stats (you can fetch from /api/mechanic/stats if needed)
+                // For now, we'll calculate from history
+                const historyJobs = Object.values(data.history).flat();
+                document.getElementById('stat-count').innerText = historyJobs.length;
+                
+                // Render jobs based on current tab
+                renderGroupedJobs(data);
+            } catch (err) {
+                console.error('Error refreshing dashboard:', err);
+            }
+        }
+
+        function renderGroupedJobs(data) {
+            const container = document.getElementById('job-sections');
+            container.innerHTML = '';
+            
+            let jobsToRender = {};
+            
+            if (currentTab === 'new') {
+                jobsToRender = data.pending;
+            } else if (currentTab === 'active') {
+                jobsToRender = data.active;
+            } else if (currentTab === 'done') {
+                jobsToRender = data.history;
+            }
+            
+            // Render each time group (Today, Yesterday, Older)
+            ['Today', 'Yesterday', 'Older'].forEach(timeGroup => {
+                const jobs = jobsToRender[timeGroup];
+                if (jobs && jobs.length > 0) {
+                    // Create time group header
+                    const header = document.createElement('h3');
+                    header.style.cssText = 'font-size: 12px; font-weight: 800; color: #94a3b8; letter-spacing: 1px; margin: 20px 0 12px 0; text-transform: uppercase;';
+                    header.textContent = timeGroup;
+                    container.appendChild(header);
+                    
+                    // Render job cards
+                    jobs.forEach(job => {
+                        const card = createJobCard(job, currentTab);
+                        container.appendChild(card);
+                    });
+                }
+            });
+            
+            // Empty state
+            if (container.children.length === 0) {
+                const emptyMsg = document.createElement('p');
+                emptyMsg.style.cssText = 'text-align:center; padding:60px 0; color:#94a3b8; font-weight: 600;';
+                emptyMsg.innerHTML = '<i data-lucide="inbox" size="48" style="margin-bottom:15px; opacity:0.3;"></i><br>No jobs in this category.';
+                container.appendChild(emptyMsg);
+            }
+            
+            lucide.createIcons();
+        }
+
+        function createJobCard(job, tabType) {
+            const card = document.createElement('div');
+            card.className = 'job-card-mech animate-card';
+            card.id = `job-${job.id}`;
+            
+            if (tabType === 'new') {
+                // New job card with Accept button
+                const isSOS = job.sos_active;
+                card.style.borderLeft = isSOS ? '5px solid #ef4444' : '5px solid #f97316';
+                if(isSOS) card.style.background = '#fff1f2';
+                
+                card.innerHTML = `
+                    <div style="display: flex; justify-content: space-between;">
+                        <div>
+                            <h4 style="margin: 0;">${job.owner_name}</h4>
+                            <p style="font-size: 12px; color: #64748b;">${job.make} ${job.model} (${job.plate_number})</p>
+                        </div>
+                        <a href="tel:${job.owner_phone || ''}" style="background:#f1f5f9; padding:8px; border-radius:10px; color:var(--primary-blue);"><i data-lucide="phone" size="18"></i></a>
+                    </div>
+                    <p style="margin: 15px 0; font-weight: 700; color: #ef4444;">${job.service_type}</p>
+                    <button onclick="acceptJob(${job.id})" class="btn-primary" style="width: 100%;">Accept Job</button>
+                `;
+            } else if (tabType === 'active') {
+                // Active job card with status badge
+                let statusColor = '#3b82f6';
+                if(job.status === 'diagnosing') statusColor = '#8b5cf6';
+                if(job.status === 'fixing') statusColor = '#22c55e';
+                
+                // Workflow Button Logic
+                let actionBtn = '';
+                if (job.status === 'accepted') {
+                    actionBtn = `<button onclick="verifyJob(${job.id})" class="btn-primary" style="width: 100%; background:#3b82f6;">I have reached the Car</button>`;
+                } else {
+                    actionBtn = `<button onclick="location.href='/mechanic/job/${job.id}'" class="btn-primary" style="width: 100%; border-radius: 14px; background: #0f172a; display: flex; align-items: center; justify-content: center; gap: 10px;"><i data-lucide="external-link" size="18"></i> Update Repair</button>`;
+                }
+                
+                card.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <span style="font-size: 10px; font-weight: 800; color: #64748b; letter-spacing: 0.5px;">JOB ID: #${job.id}</span>
+                        <span style="background:${statusColor}20; color:${statusColor}; font-size:10px; padding:4px 10px; border-radius:20px; font-weight:900; text-transform:uppercase;">
+                            ${job.status}
+                        </span>
+                    </div>
+                    <div style="margin-bottom: 12px;">
+                        <h4 style="margin: 0; color: #1e293b;">${job.owner_name}</h4>
+                        <p style="font-size: 13px; font-weight: 700; color: var(--action-orange); margin-top: 2px;">
+                            ${job.make} ${job.model} (${job.plate_number})
+                        </p>
+                    </div>
+                    <div style="font-size:11px; color:#94a3b8; margin:10px 0; font-weight: 600;">
+                        OWNER ID: ${job.owner_id} • CAR ID: ${job.car_id || job.vehicle_id}
+                    </div>
+                    <div style="margin: 15px 0; padding: 12px; background: #f8fafc; border-radius: 12px; border: 1px solid #f1f5f9;">
+                        <p style="font-size: 11px; color: #94a3b8; font-weight: 800; margin-bottom: 5px;">ISSUE TO FIX</p>
+                        <span style="font-size: 14px; font-weight: 600; color: #334155;">${job.service_type}</span>
+                    </div>
+                    ${actionBtn}
+                `;
+            } else if (tabType === 'done') {
+                // History card
+                card.style.opacity = '0.8';
+                card.innerHTML = `
+                    <div style="display: flex; justify-content: space-between;">
+                        <div>
+                            <h4 style="margin: 0;">${job.owner_name}</h4>
+                            <p style="font-size: 12px; color: #64748b;">${job.make} ${job.model}</p>
+                        </div>
+                        <span style="background:#dcfce7; color:#15803d; font-size:10px; padding:4px 10px; border-radius:20px; font-weight:900;">DONE</span>
+                    </div>
+                    <p style="margin: 10px 0; font-weight: 600;">${job.service_type}</p>
+                    <p style="font-size: 13px; color: #64748b;">Total: UGX ${(job.total_price || 0).toLocaleString()}</p>
+                `;
+            }
+            
+            return card;
+        }
+
+        function verifyJob(jobId) {
+            AppAlert.confirm(
+                "Verify Problem?", 
+                "Press this once you have inspected the car and confirmed the issue with the owner.", 
+                async () => {
+                    try {
+                        await fetch('/api/mechanic/verify-problem', { 
+                            method: 'POST', 
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({ jobId }) 
+                        });
+                        AppAlert.show(
+                            "Problem Verified", 
+                            "Checklist is now active on both your views.", 
+                            "success"
+                        );
+                        refreshDashboard();
+                    } catch (err) {
+                        console.error('Error verifying job:', err);
+                        AppAlert.show("Error", "Could not verify the problem. Please try again.", "error");
+                    }
+                }
+            );
+        }
+    </script>
+</body>
+</html>

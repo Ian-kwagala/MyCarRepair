@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create Account | MyCarRepair</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="stylesheet" href="/css/alerts.css">
+    <script src="/js/alerts.js"></script>
+</head>
+<body class="blurred-bg"> <!-- BLUR ACTIVATED HERE -->
+
+    <div class="page-bg"></div>
+    <div class="bg-overlay"></div>
+
+    <div class="auth-page">
+        <div class="login-card">
+            <div class="login-header">
+                <div class="role-toggle">
+                    <button class="role-btn active" onclick="setRole('owner')">Car Owner</button>
+                    <button class="role-btn" onclick="setRole('mechanic')">Mechanic</button>
+                </div>
+                <h2>Create Account</h2>
+                <p>Join the trusted automotive marketplace</p>
+            </div>
+
+            <div class="login-body">
+                <form action="/auth/signup" method="POST">
+                    <input type="hidden" name="role" id="userRole" value="owner">
+                    
+                    <div class="form-group">
+                        <label>Full Name</label>
+                        <div class="input-wrapper">
+                            <i data-lucide="user" size="18"></i>
+                            <input type="text" name="full_name" placeholder="John Doe" required>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Email Address</label>
+                        <div class="input-wrapper">
+                            <i data-lucide="mail" size="18"></i>
+                            <input type="email" name="email" placeholder="john@example.com" required>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Phone Number</label>
+                        <div class="input-wrapper">
+                            <i data-lucide="phone" size="18"></i>
+                            <input type="text" name="phone" placeholder="+256..." required>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Password</label>
+                        <div class="input-wrapper">
+                            <i data-lucide="lock" size="18"></i>
+                            <input type="password" name="password" placeholder="••••••••" required>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn-primary" style="width: 100%; justify-content: center;">
+                        Register Now
+                    </button>
+                </form>
+                <p style="text-align: center; margin-top: 20px; font-size: 14px;">
+                    Already have an account? <a href="/login" style="color: var(--action-orange); font-weight: bold; text-decoration: none;">Sign In</a>
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        lucide.createIcons();
+        function setRole(role) {
+            document.getElementById('userRole').value = role;
+            const buttons = document.querySelectorAll('.role-btn');
+            buttons.forEach(btn => btn.classList.remove('active'));
+            role === 'owner' ? buttons[0].classList.add('active') : buttons[1].classList.add('active');
+        }
+    </script>
+</body>
+</html>

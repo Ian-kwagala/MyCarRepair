@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Activity | MyCarRepair</title>
+    <!-- Links to separate CSS files -->
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="/css/activity.css">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="stylesheet" href="/css/alerts.css">
+<script src="/js/alerts.js"></script>
+</head>
+<body style="background: #f8fafc; padding-bottom: 100px;">
+
+    <!-- Professional Header -->
+    <div style="background: var(--primary-blue); padding: 40px 20px; color: white; border-radius: 0 0 30px 30px;">
+        <h2 style="font-weight: 900; letter-spacing: -1px;">Service Activity</h2>
+        <p style="opacity: 0.7; font-size: 13px;">Manage and track your vehicle repairs</p>
+    </div>
+
+    <div class="activity-container">
+        <div class="tab-header">
+            <button class="tab-btn active" onclick="switchTab('pending')">PENDING</button>
+            <button class="tab-btn" onclick="switchTab('history')">HISTORY</button>
+        </div>
+
+        <!-- PENDING SECTION -->
+        <div id="section-pending" class="animate-item">
+            <% const currentData = pendingJobs; %>
+            <% const hasPendingJobs = currentData && (currentData.Today.length > 0 || currentData.Yesterday.length > 0 || currentData.Older.length > 0); %>
+            <% if (hasPendingJobs) { %>
+                <% ['Today', 'Yesterday', 'Older'].forEach(day => { %>
+                    <% if (currentData[day] && currentData[day].length > 0) { %>
+                        <div class="date-group">
+                            <h5 class="date-header"><%= day %></h5>
+                            <% currentData[day].forEach(job => { %>
+                                <div class="activity-card" onclick="location.href='/owner/track-job/<%= job.id %>'">
+                                    <div style="display:flex; justify-content:space-between;">
+                                        <span class="time-label">Job #<%= job.id %> • <%= job.plate_number %></span>
+                                        <span class="status-badge status-<%= job.status %>"><%= job.status %></span>
+                                    </div>
+                                    
+                                    <h4 style="margin: 8px 0 2px 0;"><%= job.service_type %></h4>
+                                    <p style="font-size: 13px; color: #64748b; font-weight: 600;"><%= job.make %> <%= job.model %></p>
+                                    
+                                    <% if(job.status === 'accepted') { %>
+                                        <div class="en-route-banner">
+                                            <i data-lucide="truck" class="truck-bounce"></i> 
+                                            Mechanic is driving to you now!
+                                        </div>
+                                    <% } %>
+                                </div>
+                            <% }) %>
+                        </div>
+                    <% } %>
+                <% }) %>
+            <% } else { %>
+                <div style="text-align: center; padding: 60px 0; color: #94a3b8;">
+                    <i data-lucide="clipboard-list" size="48" style="margin-bottom: 15px; opacity: 0.3;"></i>
+                    <p style="font-weight: 600;">No pending jobs.</p>
+                </div>
+            <% } %>
+        </div>
+
+        <!-- HISTORY SECTION -->
+        <div id="section-history" style="display: none;" class="animate-item">
+            <% const historyData = historyJobs; %>
+            <% const hasHistoryJobs = historyData && (historyData.Today.length > 0 || historyData.Yesterday.length > 0 || historyData.Older.length > 0); %>
+            <% if (hasHistoryJobs) { %>
+                <% ['Today', 'Yesterday', 'Older'].forEach(day => { %>
+                    <% if (historyData[day] && historyData[day].length > 0) { %>
+                        <div class="date-group">
+                            <h5 class="date-header"><%= day %></h5>
+                            <% historyData[day].forEach(job => { %>
+                                <div class="activity-card" onclick="location.href='/owner/track-job/<%= job.id %>'">
+                                    <div style="display:flex; justify-content:space-between;">
+                                        <span class="time-label">Job #<%= job.id %> • <%= job.plate_number %></span>
+                                        <span class="status-badge status-<%= job.status %>"><%= job.status %></span>
+                                    </div>
+                                    
+                                    <h4 style="margin: 8px 0 2px 0;"><%= job.service_type %></h4>
+                                    <p style="font-size: 13px; color: #64748b; font-weight: 600;"><%= job.make %> <%= job.model %></p>
+                                    <p style="font-size: 12px; color: #94a3b8; margin-top: 8px;">Total: UGX <%= (job.total_price || 0).toLocaleString() %></p>
+                                </div>
+                            <% }) %>
+                        </div>
+                    <% } %>
+                <% }) %>
+            <% } else { %>
+                <div style="text-align: center; padding: 60px 0; color: #94a3b8;">
+                    <i data-lucide="clipboard-list" size="48" style="margin-bottom: 15px; opacity: 0.3;"></i>
+                    <p style="font-weight: 600;">No completed jobs yet.</p>
+                </div>
+            <% } %>
+        </div>
+    </div>
+
+    <!-- Reusable Bottom Nav -->
+    <%- include('../partials/bottom-nav') %>
+
+    <script>
+        lucide.createIcons();
+
+        function switchTab(type) {
+            document.getElementById('section-pending').style.display = type === 'pending' ? 'block' : 'none';
+            document.getElementById('section-history').style.display = type === 'history' ? 'block' : 'none';
+            document.querySelectorAll('.tab-btn').forEach((btn, i) => {
+                btn.classList.toggle('active', (type === 'pending' && i === 0) || (type === 'history' && i === 1));
+            });
+        }
+    </script>
+</body>
+</html>

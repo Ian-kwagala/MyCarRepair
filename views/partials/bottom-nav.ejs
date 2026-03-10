@@ -1,0 +1,24 @@
+<!-- REUSABLE BOTTOM NAVIGATION -->
+<nav class="bottom-nav">
+    <a href="/owner/dashboard" class="nav-item <%= (typeof currentPage !== 'undefined' && currentPage === 'dashboard') ? 'active' : '' %>">
+        <i data-lucide="layout-dashboard"></i>
+        <span>Dashboard</span>
+    </a>
+    
+    <a href="/owner/activity" class="nav-item <%= (typeof currentPage !== 'undefined' && currentPage === 'activity') ? 'active' : '' %>">
+        <i data-lucide="clock"></i>
+        <span>Activity</span>
+    </a>
+    
+    <a href="/logout" class="nav-item">
+        <i data-lucide="log-out"></i>
+        <span>Logout</span>
+    </a>
+</nav>
+
+<script>
+    // Ensure icons are rendered even inside partials
+    if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
+    }
+</script>

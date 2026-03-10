@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Job Details | MyCarRepair</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="stylesheet" href="/css/alerts.css">
+<script src="/js/alerts.js"></script>
+</head>
+<body style="background: #f8fafc; padding-bottom: 40px;">
+
+    <!-- Professional Header -->
+    <div style="background: #0f172a; color: white; padding: 40px 20px; border-radius: 0 0 25px 25px;">
+        <div style="display: flex; align-items: center; gap: 15px;">
+            <!-- Changed to a direct link to avoid "Cannot GET" loops -->
+            <a href="/owner/activity" style="background: rgba(255,255,255,0.1); border:none; color:white; padding:8px; border-radius:10px; display: flex; text-decoration: none;">
+                <i data-lucide="arrow-left"></i>
+            </a>
+            <h2 style="margin: 0; font-weight: 800;">Service Summary</h2>
+        </div>
+    </div>
+
+    <div style="padding: 25px 20px;" class="animate-pop-in">
+        
+        <!-- VEHICLE & SERVICE INFO (New section for better UX) -->
+        <div style="background: white; padding: 20px; border-radius: 20px; border: 1px solid #e2e8f0; margin-bottom: 25px;">
+            <p style="font-size: 11px; font-weight: 800; color: #94a3b8; letter-spacing: 1px; margin-bottom: 10px;">VEHICLE & SERVICE</p>
+            <!-- ADDED SAFETY CHECKS (|| 'Unknown') -->
+            <h3 style="margin: 0; color: #1e293b;">
+                <%= job.make ? (job.make + ' ' + job.model) : 'Emergency Request' %>
+            </h3>
+            <p style="color: var(--action-orange); font-weight: 700; margin-top: 5px;">
+                <%= job.service_type || 'General Repair' %>
+            </p>
+            <p style="font-size: 12px; color: #64748b; margin-top: 5px;">
+                Plate: <%= job.plate_number || 'Not provided' %>
+            </p>
+        </div>
+
+        <!-- PARTS QUOTED SECTION -->
+        <h4 style="color: #64748b; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 15px;">Parts Used & Quoted</h4>
+        
+        <div style="background: white; border-radius: 20px; border: 1px solid #e2e8f0; overflow: hidden;">
+            <% if (parts && parts.length > 0) { %>
+                <% parts.forEach(part => { %>
+                    <div style="padding: 15px; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <p style="margin: 0; font-weight: 700; color: #1e293b;"><%= part.part_name %></p>
+                            <!-- <span style="font-size: 11px; color: <%= part.is_approved ? '#22c55e' : '#f43f5e' %>; font-weight: 800;"> -->
+                                <%= part.is_approved ? 'APPROVED' : 'REJECTED' %>
+                            </span>
+                        </div>
+                        <!-- Safety fix: Add fallback to 0 to prevent crash -->
+                        <strong style="color: var(--primary-blue);">UGX <%= (Number(part.price) || 0).toLocaleString() %></strong>
+                    </div>
+                <% }) %>
+            <% } else { %>
+                <div style="padding: 30px; text-align: center; color: #94a3b8;">
+                    <i data-lucide="info" size="32" style="margin-bottom: 10px; opacity: 0.5;"></i>
+                    <p style="font-size: 13px;">No spare parts were quoted for this job.</p>
+                </div>
+            <% } %>
+        </div>
+
+        <!-- RECEIPT SECTION -->
+        <% if (job.status === 'completed') { %>
+            <div style="margin-top: 30px; background: #fff7ed; border: 2.5px solid var(--action-orange); border-radius: 24px; padding: 25px; text-align: center; box-shadow: 0 15px 30px rgba(249, 115, 22, 0.1);">
+                <div style="background: var(--action-orange); width: 60px; height: 60px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 15px auto; color: white;">
+                    <i data-lucide="file-check" size="32"></i>
+                </div>
+                <h3 style="margin: 0; color: #1e293b;">Repair Complete</h3>
+                <p style="font-size: 13px; color: #9a3412; margin: 8px 0 20px 0;">Official Receipt Available</p>
+                
+                <div style="background: white; padding: 15px; border-radius: 15px; margin-bottom: 20px;">
+                    <p style="font-size: 11px; color: #94a3b8; font-weight: 700;">TOTAL AMOUNT PAID</p>
+                    <h2 style="margin: 5px 0; color: var(--primary-blue);">UGX <%= (Number(job.total_price) || 0).toLocaleString() %></h2>
+                </div>
+
+                <a href="/receipts/receipt-<%= job.id %>.pdf" target="_blank" class="btn-primary" style="display: block; text-decoration: none; padding: 18px; border-radius: 15px;">
+                    <i data-lucide="download" size="18" style="vertical-align: middle; margin-right: 8px;"></i> Download PDF Receipt
+                </a>
+            </div>
+        <% } %>
+    </div>
+
+    <script>lucide.createIcons();</script>
+</body>
+</html>

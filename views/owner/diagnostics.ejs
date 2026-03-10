@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Diagnostics | MyCarRepair</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="stylesheet" href="/css/alerts.css">
+<script src="/js/alerts.js"></script>
+    <style>
+        /* LUXURY ANIMATIONS */
+        @keyframes revealUp {
+            from { opacity: 0; transform: translateY(25px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .reveal { animation: revealUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) both; }
+        .delay-1 { animation-delay: 0.1s; }
+        .delay-2 { animation-delay: 0.2s; }
+        .delay-3 { animation-delay: 0.3s; }
+        .delay-4 { animation-delay: 0.4s; }
+
+        /* SYMPTOM CARDS */
+        .symptom-input { display: none; }
+        .symptom-box {
+            background: white; border: 2.5px solid #e2e8f0; border-radius: 20px;
+            padding: 25px 15px; text-align: center; cursor: pointer; transition: 0.3s;
+            display: flex; flex-direction: column; align-items: center; gap: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+        }
+        .symptom-box i { color: #94a3b8; transition: 0.3s; }
+        .symptom-box span { font-weight: 600; font-size: 14px; color: #475569; }
+
+        .symptom-input:checked + .symptom-box {
+            border-color: var(--action-orange); background: #fff7ed;
+            transform: scale(1.05); box-shadow: 0 10px 20px rgba(249, 115, 22, 0.15);
+        }
+        .symptom-input:checked + .symptom-box i { color: var(--action-orange); transform: rotate(10deg); }
+
+        /* PHOTO UPLOAD PULSE */
+        .photo-zone {
+            border: 2px dashed #cbd5e1; border-radius: 20px; padding: 30px;
+            text-align: center; background: white; cursor: pointer; transition: 0.3s;
+            position: relative; overflow: hidden;
+        }
+        .photo-zone:hover { border-color: var(--action-orange); background: #fff7ed; }
+        
+        .pulse-icon {
+            display: inline-flex; padding: 12px; background: #f1f5f9;
+            border-radius: 50%; color: #64748b; margin-bottom: 10px;
+            animation: softPulse 2s infinite;
+        }
+        @keyframes softPulse {
+            0% { box-shadow: 0 0 0 0 rgba(100, 116, 139, 0.2); }
+            70% { box-shadow: 0 0 0 15px rgba(100, 116, 139, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(100, 116, 139, 0); }
+        }
+
+        .input-elegant {
+            width: 100%; padding: 15px; border-radius: 14px; border: 1.5px solid #e2e8f0;
+            background: white; outline: none; font-size: 15px; transition: 0.3s;
+        }
+        .input-elegant:focus { border-color: var(--action-orange); box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.1); }
+    </style>
+</head>
+<body style="background: #f8fafc; padding-bottom: 40px;">
+
+    <!-- Gradient Header -->
+    <div style="background: linear-gradient(135deg, #0f172a 0%, #1e40af 100%); padding: 40px 20px; color: white; border-radius: 0 0 35px 35px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);">
+        <div style="display: flex; align-items: center; gap: 15px;">
+            <a href="/owner/dashboard" style="color: white; background: rgba(255,255,255,0.1); padding: 8px; border-radius: 12px;"><i data-lucide="arrow-left" size="20"></i></a>
+            <div>
+                <h2 style="font-weight: 800; letter-spacing: -0.5px;">Vehicle Diagnostics</h2>
+                <p style="opacity: 0.7; font-size: 13px;">Identify issues for a faster repair</p>
+            </div>
+        </div>
+    </div>
+
+    <div style="padding: 25px 20px;">
+        <form action="/owner/select-mechanic" method="POST">
+            
+            <label class="label-text reveal delay-1" style="font-weight: 700; margin-bottom: 15px; display: block;">STEP 1: SELECT SYMPTOMS</label>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 10px;">
+                
+                <label class="reveal delay-1">
+                    <input type="checkbox" name="symptoms" value="Engine Light" class="symptom-input">
+                    <div class="symptom-box"><i data-lucide="alert-octagon" size="32"></i><span>Engine Light</span></div>
+                </label>
+
+                <label class="reveal delay-2">
+                    <input type="checkbox" name="symptoms" value="Strange Noise" class="symptom-input">
+                    <div class="symptom-box"><i data-lucide="volume-2" size="32"></i><span>Strange Noise</span></div>
+                </label>
+
+                <label class="reveal delay-3">
+                    <input type="checkbox" name="symptoms" value="Overheating" class="symptom-input">
+                    <div class="symptom-box"><i data-lucide="thermometer-snowflake" size="32"></i><span>Overheating</span></div>
+                </label>
+
+                <label class="reveal delay-4">
+                    <input type="checkbox" name="symptoms" value="Unusual Smoke" class="symptom-input">
+                    <div class="symptom-box"><i data-lucide="wind" size="32"></i><span>Unusual Smoke</span></div>
+                </label>
+            </div>
+
+            <!-- PHOTO SECTION -->
+            <div class="reveal delay-3" style="margin-top: 35px;">
+                <label class="label-text" style="font-weight: 700; display: block; margin-bottom: 12px;">STEP 2: ADD VISUAL PROOF</label>
+                <div class="photo-zone" onclick="document.getElementById('diag_photo').click();" style="display: flex; flex-direction: column; align-items: center; justify-content: center; width: 120px; height: 120px; margin-bottom: 10px;">
+                    <div class="pulse-icon"><i data-lucide="camera" size="28"></i></div>
+                    <input type="file" id="diag_photo" name="diag_photo" accept="image/*" style="display: none;" onchange="showPreview(event)" required>
+                </div>
+                <div id="photo-preview" style="margin-top: 10px;"></div>
+                <h4 style="color: #1e293b; margin-top: 0;">Snap the Dashboard</h4>
+                <p style="font-size: 12px; color: #94a3b8; margin-top: 4px;">Helps mechanics prepare the right tools</p>
+            </div>
+
+            <!-- CAR SELECTION -->
+            <div class="reveal delay-4" style="margin-top: 35px;">
+                <label class="label-text" style="font-weight: 700; display: block; margin-bottom: 12px;">STEP 3: CHOOSE VEHICLE</label>
+                <div style="position: relative; display: flex; align-items: center;">
+                    <i data-lucide="car" size="18" style="position: absolute; left: 15px; color: #94a3b8;"></i>
+                    <select name="vehicle_id" class="input-elegant" style="padding-left: 45px;" required>
+                        <% if (cars.length === 0) { %>
+                            <option disabled selected>Please add a car in your garage first</option>
+                        <% } else { %>
+                            <!-- If only 1 car, this option becomes 'selected' automatically -->
+                            <% cars.forEach(car => { %>
+                                <option value="<%= car.id %>" <%= cars.length === 1 ? 'selected' : '' %>>
+                                    <%= car.make %> <%= car.model %> (<%= car.plate_number %>)
+                                </option>
+                            <% }); %>
+                        <% } %>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Hidden Fields to trigger Step 2 (Select Mechanic) -->
+            <input type="hidden" name="service_type" value="Diagnostic Scan">
+            <input type="hidden" name="scheduled_date" value="Immediate">
+
+            <button type="submit" class="btn-primary reveal delay-4" style="width: 100%; margin-top: 40px; padding: 20px; border-radius: 20px; font-size: 16px; font-weight: 700; box-shadow: 0 15px 30px rgba(249, 115, 22, 0.3);">
+                Find Diagnostic Expert <i data-lucide="zap" size="18" style="margin-left: 8px;"></i>
+            </button>
+        </form>
+    </div>
+
+    <script>
+        function showPreview(event) {
+            const preview = document.getElementById('photo-preview');
+            preview.innerHTML = '';
+            const file = event.target.files[0];
+            if (file) {
+                const img = document.createElement('img');
+                img.src = URL.createObjectURL(file);
+                img.style.maxWidth = '120px';
+                img.style.maxHeight = '120px';
+                img.style.borderRadius = '12px';
+                img.style.boxShadow = '0 2px 8px rgba(0,0,0,0.08)';
+                img.style.marginTop = '8px';
+                preview.appendChild(img);
+            }
+        }
+        lucide.createIcons();
+    </script>
+</body>
+</html>

@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Review Booking | MyCarRepair</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="stylesheet" href="/css/alerts.css">
+<script src="/js/alerts.js"></script>
+    <style>
+        .review-card {
+            background: white;
+            border-radius: 24px;
+            padding: 25px;
+            margin-top: -30px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+            border: 1px solid #e2e8f0;
+            animation: slideUp 0.5s ease-out;
+        }
+        @keyframes slideUp {
+            from { transform: translateY(20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        .info-row {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            padding: 15px 0;
+            border-bottom: 1px solid #f1f5f9;
+        }
+        .info-icon {
+            background: #f1f5f9;
+            padding: 10px;
+            border-radius: 12px;
+            color: var(--primary-blue);
+        }
+    </style>
+</head>
+<body style="background: #f8fafc; padding-bottom: 40px;">
+
+    <!-- Header -->
+    <div style="background: var(--primary-blue); padding: 40px 20px 60px 20px; color: white; text-align: center;">
+        <h2 style="font-weight: 800;">Review Booking</h2>
+        <p style="opacity: 0.7; font-size: 14px;">Please check your details below</p>
+    </div>
+
+    <div style="padding: 0 20px;">
+        <div class="review-card">
+            <!-- VEHICLE -->
+            <div class="info-row">
+                <div class="info-icon"><i data-lucide="car"></i></div>
+                <div>
+                    <p style="font-size: 11px; color: #94a3b8; font-weight: 700;">VEHICLE</p>
+                    <strong><%= vehicle.make %> <%= vehicle.model %></strong>
+                    <p style="font-size: 12px; color: #64748b;"><%= vehicle.plate_number %></p>
+                </div>
+            </div>
+
+            <!-- SERVICE -->
+            <div class="info-row">
+                <div class="info-icon"><i data-lucide="settings"></i></div>
+                <div>
+                    <p style="font-size: 11px; color: #94a3b8; font-weight: 700;">SERVICE TYPE</p>
+                    <strong style="color: var(--action-orange);"><%= service_type %></strong>
+                </div>
+            </div>
+
+            <!-- DATE -->
+            <div class="info-row">
+                <div class="info-icon"><i data-lucide="calendar"></i></div>
+                <div>
+                    <p style="font-size: 11px; color: #94a3b8; font-weight: 700;">APPOINTMENT DATE</p>
+                    <strong><%= scheduled_date %></strong>
+                </div>
+            </div>
+
+            <!-- MECHANIC -->
+            <div class="info-row" style="border-bottom: none;">
+                <div class="info-icon"><i data-lucide="wrench"></i></div>
+                <div>
+                    <p style="font-size: 11px; color: #94a3b8; font-weight: 700;">SELECTED MECHANIC</p>
+                    <strong><%= mechanic.full_name %></strong>
+                    <p style="font-size: 12px; color: #64748b;">Kampala Garage • 4.9 ★</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- FINAL FORM TO SAVE TO DB -->
+        <form action="/owner/finalize-booking" method="POST">
+            <!-- Hidden inputs to carry data one last time -->
+            <input type="hidden" name="vehicle_id" value="<%= vehicle.id %>">
+            <input type="hidden" name="mechanic_id" value="<%= mechanic.id %>">
+            <input type="hidden" name="service_type" value="<%= service_type %>">
+            <input type="hidden" name="scheduled_date" value="<%= scheduled_date %>">
+
+            <button type="submit" class="btn-primary" style="width: 100%; margin-top: 30px; padding: 20px; border-radius: 18px; font-size: 16px; box-shadow: 0 15px 30px rgba(249, 115, 22, 0.3);">
+                Complete Booking <i data-lucide="check-circle" size="18" style="margin-left: 8px;"></i>
+            </button>
+        </form>
+
+        <button onclick="history.back()" style="width: 100%; margin-top: 15px; background: none; border: none; color: #94a3b8; font-weight: 600; cursor: pointer;">
+            Change Details
+        </button>
+    </div>
+
+    <script>lucide.createIcons();</script>
+</body>
+</html>
