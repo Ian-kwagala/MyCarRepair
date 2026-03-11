@@ -6,7 +6,7 @@ const http = require('http');
 const path = require('path');
 const { Server } = require('socket.io');
 const bcrypt = require('bcryptjs');
-const db = require('./db'); // Import the DB connection we made earlier
+const db = require('./db'); // Import the DB connection 
 const session = require('express-session');
 const multer = require('multer');
 const PDFDocument = require('pdfkit');
@@ -47,11 +47,17 @@ io.engine.use(sessionMiddleware);
 // Configure how files are stored
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
-        cb(null, 'public/uploads/cars/'); // Ensure this folder exists!
+        // Determine destination based on field name
+        if (file.fieldname === 'part_photos' || file.fieldname === 'part_photo') {
+            cb(null, 'public/uploads/parts/');
+        } else {
+            cb(null, 'public/uploads/cars/');
+        }
     },
     filename: (req, file, cb) => {
-        // Create a unique filename: car-timestamp.jpg
-        cb(null, 'car-' + Date.now() + path.extname(file.originalname));
+        // Create a unique filename based on type
+        const prefix = (file.fieldname === 'part_photos' || file.fieldname === 'part_photo') ? 'part-' : 'car-';
+        cb(null, prefix + Date.now() + path.extname(file.originalname));
     }
 });
 
@@ -67,19 +73,24 @@ async function broadcastJob(jobId) {
         WHERE j.id = $1
     `;
     const result = await db.query(query, [jobId]);
-    io.emit('new_job_pushed', result.rows[0]);
+    // Only broadcast to online mechanics in the 'online_mechanics' room
+    io.to('online_mechanics').emit('new_job_pushed', result.rows[0]);
 }
 
 // HELPER: Group jobs by human-friendly dates
-function groupJobs(jobs) {
-    const groups = { Today: [], Yesterday: [], Older: [] };
-    const today = new Date().toDateString();
-    const yesterday = new Date(Date.now() - 86400000).toDateString();
-
+function groupJobsByDate(jobs) {
+    const groups = { Today: [], Yesterday: [], 'This Week': [], 'Last Week': [], 'Last Month': [], Older: [] };
+    const now = new Date();
+    
     jobs.forEach(job => {
-        const jobDate = new Date(job.created_at).toDateString();
-        if (jobDate === today) groups.Today.push(job);
-        else if (jobDate === yesterday) groups.Yesterday.push(job);
+        const date = new Date(job.created_at);
+        const diffDays = Math.floor((now - date) / (1000 * 60 * 60 * 24));
+
+        if (diffDays === 0) groups.Today.push(job);
+        else if (diffDays === 1) groups.Yesterday.push(job);
+        else if (diffDays < 7) groups['This Week'].push(job);
+        else if (diffDays < 14) groups['Last Week'].push(job);
+        else if (diffDays < 30) groups['Last Month'].push(job);
         else groups.Older.push(job);
     });
     return groups;
@@ -289,8 +300,8 @@ app.get('/owner/activity', isAuthenticated, async (req, res) => {
         const pendingArray = result.rows.filter(j => j.status !== 'completed');
         const historyArray = result.rows.filter(j => j.status === 'completed');
         
-        const pendingJobs = groupJobs(pendingArray);
-        const historyJobs = groupJobs(historyArray);
+        const pendingJobs = groupJobsByDate(pendingArray);
+        const historyJobs = groupJobsByDate(historyArray);
 
         res.render('owner/activity', { 
             pendingJobs, 
@@ -677,28 +688,26 @@ app.get('/logout', (req, res) => {
         }
     });
 
-    // UPDATE: The Mechanic Dashboard Data Route
+    // --- 2. UPDATED JOB FETCHING (Separating Appointments) ---
     app.get('/api/mechanic/all-jobs', isAuthenticated, async (req, res) => {
         const mechId = req.session.userId;
         try {
             const result = await db.query(`
-                SELECT j.*, u.full_name as owner_name, v.make, v.model, v.plate_number, v.id as car_id
+                SELECT j.*, u.full_name as owner_name, v.make, v.model, v.plate_number 
                 FROM jobs j 
                 JOIN users u ON j.owner_id = u.id 
                 JOIN vehicles v ON j.vehicle_id = v.id 
-                WHERE j.mechanic_id = $1 OR j.status = 'pending'
+                WHERE j.mechanic_id = $1 OR (j.status = 'pending' AND j.mechanic_id IS NULL)
                 ORDER BY j.created_at DESC`, [mechId]);
 
-            const pending = result.rows.filter(j => j.status === 'pending');
-            const active = result.rows.filter(j => ['accepted', 'diagnosing', 'fixing'].includes(j.status) && j.mechanic_id === mechId);
-            const history = result.rows.filter(j => j.status === 'completed' && j.mechanic_id === mechId);
-
+            const jobs = result.rows;
             res.json({
-                pending: groupJobs(pending),
-                active: groupJobs(active),
-                history: groupJobs(history)
+                sos: jobs.filter(j => j.status === 'pending' && j.sos_active),
+                appointments: jobs.filter(j => j.status === 'pending' && !j.sos_active),
+                active: jobs.filter(j => ['accepted', 'diagnosing', 'fixing'].includes(j.status)),
+                history: jobs.filter(j => j.status === 'completed')
             });
-        } catch (err) { console.error(err); res.status(500).send("Error"); }
+        } catch (err) { res.status(500).send(err.message); }
     });
 
     // --- NEW ACTION: VERIFY PROBLEM (Generates Checklist) ---
@@ -741,23 +750,46 @@ app.get('/logout', (req, res) => {
         }
     });
 
+    // --- 1. TOGGLE ONLINE STATUS ---
+    app.post('/api/mechanic/toggle-status', isAuthenticated, async (req, res) => {
+        const { isOnline } = req.body;
+        try {
+            await db.query('UPDATE users SET is_online = $1 WHERE id = $2', [isOnline, req.session.userId]);
+            res.json({ success: true });
+        } catch (err) { res.status(500).send(err.message); }
+    });
+
+    // --- 3. APPROVE/DECLINE APPOINTMENT ---
+    app.post('/api/mechanic/respond-appointment', isAuthenticated, async (req, res) => {
+        const { jobId, decision } = req.body; // decision: 'accepted' or 'cancelled'
+        try {
+            await db.query('UPDATE jobs SET status = $1, mechanic_id = $2 WHERE id = $3', 
+                           [decision, req.session.userId, jobId]);
+            
+            // Notify owner via Socket
+            io.emit('appointment_update', { jobId, decision, mechanicName: req.session.userName });
+            res.json({ success: true });
+        } catch (err) { res.status(500).send(err.message); }
+    });
+
     // 1. GET: Show the Quote Form
     app.get('/mechanic/job/:id/quote', isAuthenticated, (req, res) => {
         res.render('mechanic/quote-part', { jobId: req.params.id });
     });
 
     // 2. POST: Process the Quote & Notify Owner
-    app.post('/mechanic/job/:id/quote', isAuthenticated, upload.single('part_photo'), async (req, res) => {
-        const { part_name, price } = req.body;
+    // --- UPDATE: Support Multiple Photos for Quotes ---
+    app.post('/mechanic/job/:id/quote', isAuthenticated, upload.array('part_photos', 5), async (req, res) => {
         const jobId = req.params.id;
-        // Ensure the path is correct for the browser
-        const photoPath = req.file ? '/uploads/parts/' + req.file.filename : null;
+        const { part_name, price } = req.body;
+        
+        // Save multiple paths as a comma-separated string
+        const photoPaths = req.files ? req.files.map(f => '/uploads/parts/' + f.filename).join(',') : '';
 
         try {
-            // Save to database
-            const newQuote = await db.query(
-                'INSERT INTO parts_quotes (job_id, part_name, price, photo_evidence) VALUES ($1, $2, $3, $4) RETURNING id',
-                [jobId, part_name, price, photoPath]
+            await db.query(
+                'INSERT INTO parts_quotes (job_id, part_name, price, photo_evidence, is_approved) VALUES ($1, $2, $3, $4, NULL)',
+                [jobId, part_name, price, photoPaths]
             );
 
             // Fetch owner_id to send a targeted real-time alert
@@ -772,23 +804,38 @@ app.get('/logout', (req, res) => {
             });
 
             res.redirect('/mechanic/job/' + jobId);
-        } catch (err) { console.error(err); }
+        } catch (err) { console.error(err); res.status(500).send('Error submitting quote'); }
     });
 
-// --- API: OWNER APPROVES A PART ---
+// --- API: RESPOND TO QUOTE (Approve or Decline) ---
+app.post('/api/owner/respond-quote', isAuthenticated, async (req, res) => {
+    const { partId, decision, jobId } = req.body;
+    
+    console.log('Received quote response:', { partId, decision, jobId }); // Debug log
+    
+    try {
+        if (decision === 'approve') {
+            await db.query('UPDATE parts_quotes SET is_approved = true WHERE id = $1', [partId]);
+        } else if (decision === 'reject') {
+            await db.query('UPDATE parts_quotes SET is_approved = false WHERE id = $1', [partId]);
+        }
+        
+        // Notify mechanic
+        io.emit('quote_updated', { jobId, partId, decision });
+
+        res.json({ success: true });
+    } catch (err) { 
+        console.error('Error updating quote:', err);
+        res.status(500).json({ success: false, message: err.message }); 
+    }
+});
+
+// --- LEGACY: Keep old endpoint for backward compatibility ---
 app.post('/api/owner/approve-part', isAuthenticated, async (req, res) => {
     const { partId, jobId } = req.body;
     try {
-        // 1. Update the 'is_approved' column in the database
         await db.query('UPDATE parts_quotes SET is_approved = true WHERE id = $1', [partId]);
-
-        // 2. Meaningful Comment: Notify the mechanic in real-time
-        // This tells the mechanic's screen to show the part as "Authorized"
-        io.emit('part_approved_live', { 
-            jobId: jobId, 
-            partId: partId 
-        });
-
+        io.emit('part_approved_live', { jobId: jobId, partId: partId });
         res.json({ success: true, message: "Part Approved" });
     } catch (err) {
         console.error(err);
@@ -836,34 +883,74 @@ app.post('/mechanic/job/:id/complete', isAuthenticated, async (req, res) => {
 });
 
 // --- SOCKET.IO REAL-TIME LOGIC ---
-io.on('connection', (socket) => {
+io.on('connection', async (socket) => {
     console.log('User connected: ' + socket.id);
+
+    // Check if this is an online mechanic and join them to the room
+    const session = socket.request.session;
+    if (session && session.userId && session.role === 'mechanic') {
+        try {
+            const result = await db.query('SELECT is_online FROM users WHERE id = $1', [session.userId]);
+            if (result.rows.length > 0 && result.rows[0].is_online) {
+                socket.join('online_mechanics');
+                console.log(`Mechanic ${session.userId} joined online_mechanics room`);
+            }
+        } catch (err) {
+            console.error('Error checking mechanic status:', err);
+        }
+    }
+
+    // Handle mechanic status changes (join/leave online_mechanics room)
+    socket.on('mechanic_status_changed', (data) => {
+        if (data.isOnline) {
+            socket.join('online_mechanics');
+            console.log(`Mechanic ${session?.userId} joined online_mechanics room`);
+        } else {
+            socket.leave('online_mechanics');
+            console.log(`Mechanic ${session?.userId} left online_mechanics room`);
+        }
+    });
 
     // --- NEW SOS HANDLER WITH PERSISTENCE ---
     socket.on('emergency_sos', async (data) => {
         try {
-            // 1. Fetch the technical details for the specific car selected
+            // 1. Check how many mechanics are currently online
+            const onlineMechs = await db.query(
+                "SELECT id, full_name FROM users WHERE role = 'mechanic' AND is_online = true"
+            );
+            const onlineCount = onlineMechs.rows.length;
+            
+            console.log(`🚨 SOS Triggered | ${onlineCount} online mechanic(s) available`);
+
+            // 2. Fetch the technical details for the specific car selected
             const vehicleRes = await db.query('SELECT * FROM vehicles WHERE id = $1', [data.vehicleId]);
             const car = vehicleRes.rows[0];
 
-            // 2. Fetch owner's phone
+            // 3. Fetch owner's phone
             const userRes = await db.query('SELECT phone FROM users WHERE id = $1', [socket.request.session.userId]);
             const phone = userRes.rows[0].phone;
 
-            // 3. Save the job
+            // 4. Save the job
             const newJob = await db.query(
                 'INSERT INTO jobs (owner_id, vehicle_id, service_type, status, sos_active) VALUES ($1, $2, $3, $4, $5) RETURNING id',
                 [socket.request.session.userId, car.id, data.issue, 'pending', true]
             );
 
-            // 4. Meaningful Comment: Send the "SMART DATA" to all mechanics
             const jobId = newJob.rows[0].id;
 
-            // 1. Tell the sender (Owner) their Job ID
-            socket.emit('sos_confirmed', { jobId: jobId });
+            // 5. Tell the sender (Owner) their Job ID and availability status
+            socket.emit('sos_confirmed', { 
+                jobId: jobId,
+                availableMechanics: onlineCount,
+                noMechanicsWarning: onlineCount === 0
+            });
 
-            // 2. Tell the mechanics there is a new job
-            broadcastJob(jobId);
+            // 6. Broadcast to online mechanics only (via room)
+            if (onlineCount > 0) {
+                broadcastJob(jobId);
+            } else {
+                console.log('⚠️ Warning: No mechanics online to receive SOS');
+            }
 
         } catch (err) { console.error(err); }
     });
@@ -886,23 +973,28 @@ io.on('connection', (socket) => {
         try {
             const mechanicId = socket.request.session.userId;
 
-            // 1. Update the database
+            // 1. Fetch detailed mechanic info for the owner
+            const mechRes = await db.query(`
+                SELECT u.full_name, u.phone, 
+                (SELECT COUNT(*) FROM jobs WHERE mechanic_id = u.id AND status = 'completed') as jobs_done
+                FROM users u WHERE u.id = $1`, [mechanicId]);
+            
+            const mech = mechRes.rows[0];
+            
+            // 2. Update the database
             const res = await db.query(
                 'UPDATE jobs SET mechanic_id = $1, status = $2 WHERE id = $3 RETURNING owner_id', 
                 [mechanicId, 'accepted', data.jobId]
             );
 
-            // 2. Fetch Mechanic details (Name and Phone)
-            const mechRes = await db.query('SELECT full_name, phone FROM users WHERE id = $1', [mechanicId]);
-            const mechanic = mechRes.rows[0];
-
-            // 3. Meaningful Comment: Tell everyone this job is taken, 
-            // but include the info needed for the owner's "Green Screen"
+            // 3. Tell everyone this job is taken with enhanced mechanic details
             io.emit('job_taken', {
                 jobId: data.jobId,
                 ownerId: res.rows[0].owner_id,
-                mechanicName: mechanic.full_name,
-                mechanicPhone: mechanic.phone
+                mechanicName: mech.full_name,
+                mechanicPhone: mech.phone,
+                mechanicRating: "4.9", // Static for now, can be dynamic later
+                jobsDone: mech.jobs_done
             });
 
         } catch (err) { console.error(err); }

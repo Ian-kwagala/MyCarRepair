@@ -53,6 +53,23 @@
             border: 1px solid #e2e8f0; position: relative; overflow: hidden;
         }
         .price-tag { color: var(--action-orange); font-weight: 800; font-size: 16px; }
+
+        /* Search & Filter Styles */
+        .search-input-group {
+            background: white; border: 1px solid #e2e8f0; border-radius: 12px;
+            padding: 10px 15px; display: flex; align-items: center; gap: 10px;
+        }
+        .search-input-group input {
+            border: none; outline: none; width: 100%; font-size: 14px;
+            color: #1e293b; font-weight: 600;
+        }
+        .search-input-group input::placeholder { color: #94a3b8; }
+
+        .filter-select {
+            background: white; border: 1px solid #e2e8f0; border-radius: 12px;
+            padding: 10px 15px; font-size: 13px; font-weight: 700;
+            color: #1e293b; cursor: pointer; outline: none;
+        }
     </style>
 </head>
 
@@ -90,9 +107,26 @@
     <div style="padding: 0 20px;">
         <!-- TAB NAVIGATION -->
         <div class="tab-bar">
-            <button class="tab-item active" onclick="switchTab('new', 0)">New <span id="count-new-badge" style="background: var(--action-orange); color: white; padding: 2px 6px; border-radius: 6px; font-size: 10px;">0</span></button>
-            <button class="tab-item" onclick="switchTab('active', 1)">Active <span id="count-active-badge" style="background: #3b82f6; color: white; padding: 2px 6px; border-radius: 6px; font-size: 10px;">0</span></button>
-            <button class="tab-item" onclick="switchTab('done', 2)">History</button>
+            <button class="tab-item active" onclick="switchTab('sos', 0)">SOS <span id="badge-sos" class="badge" style="background: var(--emergency-red); color: white; padding: 2px 6px; border-radius: 6px; font-size: 10px;">0</span></button>
+            <button class="tab-item" onclick="switchTab('apps', 1)">Bookings <span id="badge-apps" class="badge" style="background: #3b82f6; color: white; padding: 2px 6px; border-radius: 6px; font-size: 10px;">0</span></button>
+            <button class="tab-item" onclick="switchTab('active', 2)">Active <span id="badge-active" class="badge" style="background: #22c55e; color: white; padding: 2px 6px; border-radius: 6px; font-size: 10px;">0</span></button>
+            <button class="tab-item" onclick="switchTab('done', 3)">History</button>
+        </div>
+
+        <!-- SEARCH & FILTER BAR -->
+        <div style="padding: 10px 20px; display: flex; gap: 10px;">
+            <div class="search-input-group" style="flex: 1;">
+                <i data-lucide="search" size="16"></i>
+                <input type="text" id="jobSearch" placeholder="Search Plate or Job ID..." oninput="filterLocalJobs()">
+            </div>
+            <select id="typeFilter" class="filter-select" onchange="filterLocalJobs()">
+                <option value="all">All Types</option>
+                <option value="sos">SOS</option>
+                <option value="maintenance">Maintenance</option>
+                <option value="towing">Towing</option>
+                <option value="engine">Engine</option>
+                <option value="battery">Battery</option>
+            </select>
         </div>
 
         <!-- DYNAMIC JOB SECTIONS -->
@@ -175,9 +209,9 @@
         lucide.createIcons();
         const socket = io();
 
-        // 1. ONLINE/OFFLINE TOGGLE
+        // 1. ONLINE/OFFLINE TOGGLE (Updated with API call)
         let isOnline = true;
-        function toggleDuty() {
+        async function toggleDuty() {
             isOnline = !isOnline;
             const btn = document.getElementById('duty-toggle');
             const text = document.getElementById('status-text');
@@ -185,15 +219,23 @@
             if (isOnline) {
                 btn.className = "duty-status online";
                 text.innerText = "Online";
-                socket.emit('mechanic_online');
             } else {
                 btn.className = "duty-status offline";
                 text.innerText = "Offline";
-                socket.emit('mechanic_offline');
             }
+
+            // Save status to database
+            await fetch('/api/mechanic/toggle-status', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ isOnline })
+            });
+
+            // Notify server via socket to join/leave online_mechanics room
+            socket.emit('mechanic_status_changed', { isOnline });
         }
 
-        let currentTab = 'new';
+        let currentTab = 'sos';
 
         // 2. TAB SWITCHING LOGIC
         function switchTab(type, index) {
@@ -249,9 +291,9 @@
             location.reload(); // Refresh to clear the active job bar
         }
 
-        // 3. Listen for real-time job updates
+        // Listen for real-time job updates
         socket.on('new_job_pushed', (job) => {
-            if(isOnline && currentTab === 'new') {
+            if(isOnline && (currentTab === 'sos' || currentTab === 'apps')) {
                 refreshDashboard(); // Refresh to show new job
                 new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3').play();
             }
@@ -261,6 +303,20 @@
         window.onload = async () => {
             await refreshDashboard();
         };
+
+        // REAL-TIME SEARCH & FILTER
+        function filterLocalJobs() {
+            const query = document.getElementById('jobSearch').value.toLowerCase();
+            const type = document.getElementById('typeFilter').value.toLowerCase();
+            const cards = document.querySelectorAll('.job-card-mech');
+
+            cards.forEach(card => {
+                const matchesSearch = card.getAttribute('data-search').includes(query);
+                const matchesType = (type === 'all' || card.getAttribute('data-type').includes(type));
+                
+                card.style.display = (matchesSearch && matchesType) ? 'block' : 'none';
+            });
+        }
 
         function acceptJob(jobId) {
             socket.emit('accept_job', { jobId });
@@ -273,94 +329,103 @@
             refreshDashboard();
         }
 
+        // Respond to Appointment (Accept/Decline)
+        async function respondApp(jobId, decision) {
+            const res = await fetch('/api/mechanic/respond-appointment', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ jobId, decision })
+            });
+            const data = await res.json();
+            if(data.success) {
+                AppAlert.show(decision === 'accepted' ? "Confirmed!" : "Declined", "Owner has been notified.", "success");
+                refreshDashboard();
+            }
+        }
+
         async function refreshDashboard() {
             try {
                 const res = await fetch('/api/mechanic/all-jobs');
                 const data = await res.json();
                 
                 // Update badge counts
-                const pendingCount = Object.values(data.pending).flat().length;
-                const activeCount = Object.values(data.active).flat().length;
+                document.getElementById('badge-sos').innerText = data.sos?.length || 0;
+                document.getElementById('badge-apps').innerText = data.appointments?.length || 0;
+                document.getElementById('badge-active').innerText = data.active?.length || 0;
                 
-                document.getElementById('count-new-badge').innerText = pendingCount;
-                document.getElementById('count-active-badge').innerText = activeCount;
-                
-                // Update stats (you can fetch from /api/mechanic/stats if needed)
-                // For now, we'll calculate from history
-                const historyJobs = Object.values(data.history).flat();
-                document.getElementById('stat-count').innerText = historyJobs.length;
+                // Update stats
+                document.getElementById('stat-count').innerText = data.history?.length || 0;
                 
                 // Render jobs based on current tab
-                renderGroupedJobs(data);
+                renderJobs(data);
             } catch (err) {
                 console.error('Error refreshing dashboard:', err);
             }
         }
 
-        function renderGroupedJobs(data) {
+        function renderJobs(data) {
             const container = document.getElementById('job-sections');
             container.innerHTML = '';
             
-            let jobsToRender = {};
+            let jobsToRender = [];
             
-            if (currentTab === 'new') {
-                jobsToRender = data.pending;
+            if (currentTab === 'sos') {
+                jobsToRender = data.sos || [];
+            } else if (currentTab === 'apps') {
+                jobsToRender = data.appointments || [];
             } else if (currentTab === 'active') {
-                jobsToRender = data.active;
+                jobsToRender = data.active || [];
             } else if (currentTab === 'done') {
-                jobsToRender = data.history;
+                jobsToRender = data.history || [];
             }
             
-            // Render each time group (Today, Yesterday, Older)
-            ['Today', 'Yesterday', 'Older'].forEach(timeGroup => {
-                const jobs = jobsToRender[timeGroup];
-                if (jobs && jobs.length > 0) {
-                    // Create time group header
-                    const header = document.createElement('h3');
-                    header.style.cssText = 'font-size: 12px; font-weight: 800; color: #94a3b8; letter-spacing: 1px; margin: 20px 0 12px 0; text-transform: uppercase;';
-                    header.textContent = timeGroup;
-                    container.appendChild(header);
-                    
-                    // Render job cards
-                    jobs.forEach(job => {
-                        const card = createJobCard(job, currentTab);
-                        container.appendChild(card);
-                    });
-                }
-            });
-            
-            // Empty state
-            if (container.children.length === 0) {
-                const emptyMsg = document.createElement('p');
-                emptyMsg.style.cssText = 'text-align:center; padding:60px 0; color:#94a3b8; font-weight: 600;';
-                emptyMsg.innerHTML = '<i data-lucide="inbox" size="48" style="margin-bottom:15px; opacity:0.3;"></i><br>No jobs in this category.';
-                container.appendChild(emptyMsg);
+            // Render job cards
+            if (jobsToRender.length > 0) {
+                jobsToRender.forEach(job => {
+                    const cardHTML = createJobCardHTML(job, currentTab);
+                    container.innerHTML += cardHTML;
+                });
+            } else {
+                container.innerHTML = '<p style="text-align:center; padding:60px 0; color:#94a3b8; font-weight: 600;"><i data-lucide="inbox" size="48" style="margin-bottom:15px; opacity:0.3;"></i><br>No jobs in this category.</p>';
             }
             
             lucide.createIcons();
         }
 
-        function createJobCard(job, tabType) {
-            const card = document.createElement('div');
-            card.className = 'job-card-mech animate-card';
-            card.id = `job-${job.id}`;
-            
-            if (tabType === 'new') {
-                // New job card with Accept button
-                const isSOS = job.sos_active;
-                card.style.borderLeft = isSOS ? '5px solid #ef4444' : '5px solid #f97316';
-                if(isSOS) card.style.background = '#fff1f2';
-                
-                card.innerHTML = `
-                    <div style="display: flex; justify-content: space-between;">
-                        <div>
-                            <h4 style="margin: 0;">${job.owner_name}</h4>
-                            <p style="font-size: 12px; color: #64748b;">${job.make} ${job.model} (${job.plate_number})</p>
+        function createJobCardHTML(job, tabType) {
+            if (tabType === 'sos') {
+                // SOS job card - urgent styling
+                return `
+                    <div class="job-card-mech animate-card" style="border-left: 5px solid #ef4444; background: #fff1f2;" 
+                         data-search="${(job.plate_number + ' ' + job.id).toLowerCase()}" 
+                         data-type="${job.service_type.toLowerCase()}">
+                        <div style="display: flex; justify-content: space-between;">
+                            <div>
+                                <h4 style="margin: 0;">${job.owner_name}</h4>
+                                <p style="font-size: 12px; color: #64748b;">${job.make} ${job.model} (${job.plate_number})</p>
+                            </div>
+                            <span class="status-badge" style="background:#fecaca; color:#991b1b;">🚨 SOS</span>
                         </div>
-                        <a href="tel:${job.owner_phone || ''}" style="background:#f1f5f9; padding:8px; border-radius:10px; color:var(--primary-blue);"><i data-lucide="phone" size="18"></i></a>
+                        <p style="margin: 15px 0; font-weight: 700; color: #ef4444;">${job.service_type}</p>
+                        <button onclick="acceptJob(${job.id})" class="btn-primary" style="width: 100%; background: #ef4444;">Accept Emergency</button>
                     </div>
-                    <p style="margin: 15px 0; font-weight: 700; color: #ef4444;">${job.service_type}</p>
-                    <button onclick="acceptJob(${job.id})" class="btn-primary" style="width: 100%;">Accept Job</button>
+                `;
+            } else if (tabType === 'apps') {
+                // Appointment card with approve/decline
+                return `
+                    <div class="job-card-mech animate-card" 
+                         data-search="${(job.plate_number + ' ' + job.id).toLowerCase()}" 
+                         data-type="${job.service_type.toLowerCase()}">
+                        <div style="display:flex; justify-content:space-between;">
+                            <h4 style="margin:0;">${job.owner_name}</h4>
+                            <span class="status-badge" style="background:#eff6ff; color:#1d4ed8;">APPOINTMENT</span>
+                        </div>
+                        <p style="font-size:12px; color:#64748b; margin:10px 0;">${job.make} ${job.model} • ${job.service_type}</p>
+                        <div style="display:flex; gap:10px;">
+                            <button onclick="respondApp(${job.id}, 'cancelled')" class="btn-outline" style="flex:1; border-color:#fecaca; color:#ef4444;">Decline</button>
+                            <button onclick="respondApp(${job.id}, 'accepted')" class="btn-primary" style="flex:1;">Accept</button>
+                        </div>
+                    </div>
                 `;
             } else if (tabType === 'active') {
                 // Active job card with status badge
@@ -376,45 +441,44 @@
                     actionBtn = `<button onclick="location.href='/mechanic/job/${job.id}'" class="btn-primary" style="width: 100%; border-radius: 14px; background: #0f172a; display: flex; align-items: center; justify-content: center; gap: 10px;"><i data-lucide="external-link" size="18"></i> Update Repair</button>`;
                 }
                 
-                card.innerHTML = `
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                        <span style="font-size: 10px; font-weight: 800; color: #64748b; letter-spacing: 0.5px;">JOB ID: #${job.id}</span>
-                        <span style="background:${statusColor}20; color:${statusColor}; font-size:10px; padding:4px 10px; border-radius:20px; font-weight:900; text-transform:uppercase;">
-                            ${job.status}
-                        </span>
+                return `
+                    <div class="job-card-mech animate-card" 
+                         data-search="${(job.plate_number + ' ' + job.id).toLowerCase()}" 
+                         data-type="${job.service_type.toLowerCase()}">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                            <span style="font-size: 10px; font-weight: 800; color: #64748b; letter-spacing: 0.5px;">JOB ID: #${job.id}</span>
+                            <span style="background:${statusColor}20; color:${statusColor}; font-size:10px; padding:4px 10px; border-radius:20px; font-weight:900; text-transform:uppercase;">
+                                ${job.status}
+                            </span>
+                        </div>
+                        <div style="margin-bottom: 12px;">
+                            <h4 style="margin: 0; color: #1e293b;">${job.owner_name}</h4>
+                            <p style="font-size: 13px; font-weight: 700; color: var(--action-orange); margin-top: 2px;">
+                                ${job.make} ${job.model} (${job.plate_number})
+                            </p>
+                        </div>
+                        <div style="margin: 15px 0; padding: 12px; background: #f8fafc; border-radius: 12px; border: 1px solid #f1f5f9;">
+                            <p style="font-size: 11px; color: #94a3b8; font-weight: 800; margin-bottom: 5px;">ISSUE TO FIX</p>
+                            <span style="font-size: 14px; font-weight: 600; color: #334155;">${job.service_type}</span>
+                        </div>
+                        ${actionBtn}
                     </div>
-                    <div style="margin-bottom: 12px;">
-                        <h4 style="margin: 0; color: #1e293b;">${job.owner_name}</h4>
-                        <p style="font-size: 13px; font-weight: 700; color: var(--action-orange); margin-top: 2px;">
-                            ${job.make} ${job.model} (${job.plate_number})
-                        </p>
-                    </div>
-                    <div style="font-size:11px; color:#94a3b8; margin:10px 0; font-weight: 600;">
-                        OWNER ID: ${job.owner_id} • CAR ID: ${job.car_id || job.vehicle_id}
-                    </div>
-                    <div style="margin: 15px 0; padding: 12px; background: #f8fafc; border-radius: 12px; border: 1px solid #f1f5f9;">
-                        <p style="font-size: 11px; color: #94a3b8; font-weight: 800; margin-bottom: 5px;">ISSUE TO FIX</p>
-                        <span style="font-size: 14px; font-weight: 600; color: #334155;">${job.service_type}</span>
-                    </div>
-                    ${actionBtn}
                 `;
             } else if (tabType === 'done') {
-                // History card
-                card.style.opacity = '0.8';
-                card.innerHTML = `
-                    <div style="display: flex; justify-content: space-between;">
-                        <div>
-                            <h4 style="margin: 0;">${job.owner_name}</h4>
-                            <p style="font-size: 12px; color: #64748b;">${job.make} ${job.model}</p>
+                // History card - clickable
+                return `
+                    <div class="job-card-mech animate-card" onclick="location.href='/mechanic/job/${job.id}'" style="opacity:0.8; cursor: pointer;" 
+                         data-search="${(job.plate_number + ' ' + job.id).toLowerCase()}" 
+                         data-type="${job.service_type.toLowerCase()}">
+                        <div style="display: flex; justify-content: space-between;">
+                            <strong>Job #${job.id}</strong>
+                            <span class="status-badge" style="background:#dcfce7; color:#15803d;">✓ Completed</span>
                         </div>
-                        <span style="background:#dcfce7; color:#15803d; font-size:10px; padding:4px 10px; border-radius:20px; font-weight:900;">DONE</span>
+                        <p style="font-size:12px; margin-top:5px;">${job.owner_name} • ${job.service_type}</p>
+                        <p style="font-size: 13px; color: #64748b; margin-top: 8px;">Total: UGX ${(job.total_price || 0).toLocaleString()}</p>
                     </div>
-                    <p style="margin: 10px 0; font-weight: 600;">${job.service_type}</p>
-                    <p style="font-size: 13px; color: #64748b;">Total: UGX ${(job.total_price || 0).toLocaleString()}</p>
                 `;
             }
-            
-            return card;
         }
 
         function verifyJob(jobId) {

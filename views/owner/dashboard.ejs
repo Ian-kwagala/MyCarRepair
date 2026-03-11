@@ -183,6 +183,18 @@
             }
         });
 
+        // Socket listener for appointment responses (accept/decline)
+        socket.on('appointment_update', (data) => {
+            const type = data.decision === 'accepted' ? 'success' : 'warning';
+            const msg = data.decision === 'accepted' ? 
+                `Mechanic ${data.mechanicName} has confirmed your booking!` : 
+                `Mechanic ${data.mechanicName} is unavailable. Please try another.`;
+
+            AppAlert.show("Booking Update", msg, type, () => {
+                location.href = '/owner/activity'; // Take them to see the updated status
+            });
+        });
+
         // 1. DYNAMIC GREETING & CLOCK
         function updateStatus() {
             const now = new Date();

@@ -176,14 +176,14 @@
             </div>
 
             <div class="form-field animate-scale" style="animation-delay: 0.5s;">
-                <label class="label-text" style="font-size: 11px; font-weight: 900; color: #64748b; letter-spacing: 1.5px;">EVIDENCE PHOTO</label>
+                <label class="label-text" style="font-size: 11px; font-weight: 900; color: #64748b; letter-spacing: 1.5px;">EVIDENCE PHOTOS</label>
                 <label id="photoBox" class="photo-box" style="display: block;">
                     <div style="position: relative; z-index: 1;">
                         <i data-lucide="camera" size="40" style="margin-bottom: 15px; color: var(--action-orange);" class="icon-bounce"></i>
-                        <p style="font-weight: 700; font-size: 15px; margin-bottom: 5px; color: #1e293b;">Snap the worn-out part</p>
-                        <p style="font-size: 12px; opacity: 0.6;">Click to capture or upload</p>
+                        <p style="font-weight: 700; font-size: 15px; margin-bottom: 5px; color: #1e293b;">Upload Part Photos</p>
+                        <p style="font-size: 12px; opacity: 0.6;">Multiple photos allowed (up to 5)</p>
                     </div>
-                    <input type="file" id="photoInput" name="part_photo" accept="image/*" required style="display: none;">
+                    <input type="file" id="photoInput" name="part_photos" multiple accept="image/*" required style="display: none;">
                     <img id="photoPreview" class="photo-preview" alt="Preview">
                 </label>
             </div>
@@ -198,21 +198,27 @@
     <script>
         lucide.createIcons();
         
-        // Photo Upload Preview
+        // Photo Upload Preview (Multiple Files)
         const photoInput = document.getElementById('photoInput');
         const photoBox = document.getElementById('photoBox');
         const photoPreview = document.getElementById('photoPreview');
         
         photoInput.addEventListener('change', function(e) {
-            const file = e.target.files[0];
-            if (file) {
+            const files = e.target.files;
+            if (files.length > 0) {
+                // Show preview of first image
                 const reader = new FileReader();
                 reader.onload = function(e) {
                     photoPreview.src = e.target.result;
                     photoPreview.style.display = 'block';
                     photoBox.classList.add('has-image');
+                    
+                    // Update text to show count
+                    const textElement = photoBox.querySelector('p:last-of-type');
+                    textElement.textContent = `${files.length} photo${files.length > 1 ? 's' : ''} selected`;
+                    textElement.style.color = '#22c55e';
                 }
-                reader.readAsDataURL(file);
+                reader.readAsDataURL(files[0]);
             }
         });
         

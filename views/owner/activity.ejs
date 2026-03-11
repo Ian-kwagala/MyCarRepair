@@ -28,9 +28,9 @@
         <!-- PENDING SECTION -->
         <div id="section-pending" class="animate-item">
             <% const currentData = pendingJobs; %>
-            <% const hasPendingJobs = currentData && (currentData.Today.length > 0 || currentData.Yesterday.length > 0 || currentData.Older.length > 0); %>
+            <% const hasPendingJobs = currentData && (currentData.Today.length > 0 || currentData.Yesterday.length > 0 || currentData['This Week'].length > 0 || currentData['Last Week'].length > 0 || currentData['Last Month'].length > 0 || currentData.Older.length > 0); %>
             <% if (hasPendingJobs) { %>
-                <% ['Today', 'Yesterday', 'Older'].forEach(day => { %>
+                <% ['Today', 'Yesterday', 'This Week', 'Last Week', 'Last Month', 'Older'].forEach(day => { %>
                     <% if (currentData[day] && currentData[day].length > 0) { %>
                         <div class="date-group">
                             <h5 class="date-header"><%= day %></h5>
@@ -66,9 +66,9 @@
         <!-- HISTORY SECTION -->
         <div id="section-history" style="display: none;" class="animate-item">
             <% const historyData = historyJobs; %>
-            <% const hasHistoryJobs = historyData && (historyData.Today.length > 0 || historyData.Yesterday.length > 0 || historyData.Older.length > 0); %>
+            <% const hasHistoryJobs = historyData && (historyData.Today.length > 0 || historyData.Yesterday.length > 0 || historyData['This Week'].length > 0 || historyData['Last Week'].length > 0 || historyData['Last Month'].length > 0 || historyData.Older.length > 0); %>
             <% if (hasHistoryJobs) { %>
-                <% ['Today', 'Yesterday', 'Older'].forEach(day => { %>
+                <% ['Today', 'Yesterday', 'This Week', 'Last Week', 'Last Month', 'Older'].forEach(day => { %>
                     <% if (historyData[day] && historyData[day].length > 0) { %>
                         <div class="date-group">
                             <h5 class="date-header"><%= day %></h5>
