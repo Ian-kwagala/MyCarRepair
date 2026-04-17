@@ -11,7 +11,8 @@
     <link rel="stylesheet" href="/css/alerts.css">
 <script src="/js/alerts.js"></script>
 </head>
-<body style="background: #f8fafc; padding-bottom: 100px;">
+<body>
+    <%- include('../partials/back-nav') %>
 
     <!-- Professional Header -->
     <div style="background: var(--primary-blue); padding: 40px 20px; color: white; border-radius: 0 0 30px 30px;">
@@ -24,7 +25,7 @@
             <button class="tab-btn active" onclick="switchTab('pending')">PENDING</button>
             <button class="tab-btn" onclick="switchTab('history')">HISTORY</button>
         </div>
-
+        
         <!-- PENDING SECTION -->
         <div id="section-pending" class="animate-item">
             <% const currentData = pendingJobs; %>

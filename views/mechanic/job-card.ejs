@@ -44,7 +44,8 @@
         }
     </style>
 </head>
-<body style="background: #f8fafc; padding-bottom: 120px;">
+<body>
+    <%- include('../partials/back-nav') %>
 
     <!-- Job Header -->
     <div style="background: #0f172a; color: white; padding: 30px 20px;">
@@ -53,6 +54,13 @@
             <button onclick="location.href='/mechanic/dashboard'" style="background: rgba(255,255,255,0.1); border:none; color:white; padding: 8px; border-radius: 10px;"><i data-lucide="x"></i></button>
         </div>
         <p style="opacity: 0.7; font-size: 13px; margin-top: 5px;"><%= job.owner_name %> • <%= job.make %> <%= job.model %></p>
+        
+        <% if (job.status === 'completed') { %>
+            <div style="background: #fff7ed; color: #c2410c; padding: 10px; border-radius: 10px; margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
+                <i data-lucide="lock" size="18"></i>
+                <span style="font-size: 12px; font-weight: 800;">LOCKED RECORD: This job is finalized and cannot be edited.</span>
+            </div>
+        <% } %>
     </div>
 
     <div style="padding: 20px;">
@@ -113,17 +121,24 @@
 
     <!-- BOTTOM ACTIONS -->
     <div class="sticky-actions">
-        <!-- 1. Ability to quote multiple parts -->
-        <button onclick="location.href='/mechanic/job/<%= job.id %>/quote'" class="btn-outline" style="flex: 1; border-color: #cbd5e1;">
-            <i data-lucide="plus-circle"></i> Quote Part
-        </button>
-        
-        <!-- 2. Final closure -->
-        <form action="/mechanic/job/<%= job.id %>/complete" method="POST" style="flex: 2;">
-            <button type="submit" class="btn-primary" style="width: 100%; border-radius: 14px;">
-                Finish & Generate Receipt
+        <% if (job.status !== 'completed') { %>
+            <!-- 1. Ability to quote multiple parts -->
+            <button onclick="location.href='/mechanic/job/<%= job.id %>/quote'" class="btn-outline" style="flex: 1; border-color: #cbd5e1;">
+                <i data-lucide="plus-circle"></i> Quote Part
             </button>
-        </form>
+            
+            <!-- 2. Final closure -->
+            <form action="/mechanic/job/<%= job.id %>/complete" method="POST" style="flex: 2;">
+                <button type="submit" class="btn-primary" style="width: 100%; border-radius: 14px;">
+                    Finish & Generate Receipt
+                </button>
+            </form>
+        <% } else { %>
+            <!-- ONLY SHOW THE BACK BUTTON FOR HISTORY -->
+            <button onclick="location.href='/mechanic/dashboard'" class="btn-primary" style="width: 100%; background: #0f172a;">
+                Back to Dashboard
+            </button>
+        <% } %>
     </div>
 
     <script>
@@ -169,6 +184,12 @@
         }
 
         async function toggleTask(element, taskId) {
+            // --- PROTECTION: If job is completed, stop the function ---
+            if ("<%= job.status %>" === "completed") {
+                AppAlert.show("Locked", "You cannot update a finished job card.", "info");
+                return;
+            }
+
             const isNowDone = !element.classList.contains('done');
             element.classList.toggle('done');
 

@@ -40,12 +40,16 @@
                     </div>
                 </div>
 
-                <div class="form-group">
-                    <label>Password</label>
-                    <div class="input-wrapper">
-                        <i data-lucide="lock" size="18"></i>
-                        <input type="password" name="password" placeholder="••••••••" required>
-                    </div>
+                <!-- Inside Login Body -->
+                <div class="original-input-box">
+                    <i data-lucide="lock" size="18" color="#94a3b8"></i>
+                    <input type="password" id="login-pass" name="password" placeholder="••••••••" required>
+                    <i data-lucide="eye" class="eye-icon" onclick="togglePassword('login-pass')"></i>
+                </div>
+
+                <!-- FEATURE 4: FORGOT PASSWORD -->
+                <div style="text-align: right; margin: -5px 0 20px 0;">
+                    <a href="/admin-contact" style="font-size: 12px; color: #64748b; text-decoration: none; font-weight: 600;">Forgot Password?</a>
                 </div>
 
                 <button type="submit" class="btn-primary" style="width: 100%; justify-content: center;">
@@ -76,6 +80,20 @@
         } else {
             buttons[1].classList.add('active');
         }
+    }
+
+    // Password toggle function
+    function togglePassword(id) {
+        const input = document.getElementById(id);
+        const icon = event.target;
+        if(input.type === 'password') {
+            input.type = 'text';
+            icon.setAttribute('data-lucide', 'eye-off');
+        } else {
+            input.type = 'password';
+            icon.setAttribute('data-lucide', 'eye');
+        }
+        lucide.createIcons();
     }
 </script>
 

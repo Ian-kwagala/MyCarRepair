@@ -12,10 +12,10 @@ const pool = new Pool({
 // Test the connection immediately when the server starts
 pool.query('SELECT NOW()', (err, res) => {
     if (err) {
-        console.log("❌ DB CONNECTION FAILED: Check your .env file!");
+        console.log("❌ DB CONNECTION FAILED: Check your .env file! and u suck at coding");
         console.error("Error Message:", err.message);
     } else {
-        console.log("✅ DB CONNECTED SUCCESSFULLY to PostgreSQL!");
+        console.log("✅ Successful Launch to PostgreSQL!. So u rock! Current Time:", res.rows[0].now);
     }
 });
 

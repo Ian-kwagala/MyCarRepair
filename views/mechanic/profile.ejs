@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mechanic Profile | MyCarRepair</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="/css/alerts.css">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="/js/alerts.js"></script>
+    <style>
+        .profile-header { background: #0f172a; padding: 50px 25px 90px 25px; color: white; border-radius: 0 0 40px 40px; }
+        .overlap-card { background: white; border-radius: 30px; margin-top: -60px; padding: 30px 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.1); margin-bottom: 30px; }
+        
+        /* Expertise Checklist Styles */
+        .expertise-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+        .expertise-item { display: none; }
+        .expertise-label {
+            display: flex; align-items: center; gap: 8px; padding: 12px;
+            background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 12px;
+            font-size: 12px; font-weight: 700; color: #64748b; cursor: pointer; transition: 0.3s;
+        }
+        .expertise-item:checked + .expertise-label {
+            border-color: var(--action-orange); background: #fff7ed; color: var(--action-orange);
+            box-shadow: 0 4px 12px rgba(249, 115, 22, 0.1);
+        }
+
+        .earnings-box {
+            background: linear-gradient(135deg, #16a34a 0%, #064e3b 100%);
+            color: white; border-radius: 20px; padding: 25px; margin-bottom: 30px;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="profile-header animate-header">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <a href="/mechanic/dashboard" style="color: white;"><i data-lucide="arrow-left"></i></a>
+            <h2 style="font-weight: 900; letter-spacing: -1px;">Garage Settings</h2>
+            <i data-lucide="settings" class="animate-spin-slow"></i>
+        </div>
+    </div>
+
+    <div style="padding: 0 20px;">
+        <div class="overlap-card animate-item">
+            <!-- EARNINGS SUMMARY -->
+            <div class="earnings-box">
+                <div>
+                    <p style="font-size: 11px; font-weight: 800; opacity: 0.8; letter-spacing: 1px;">TOTAL REVENUE</p>
+                    <h2 style="margin: 5px 0;">UGX <%= Number(totalEarnings).toLocaleString() %></h2>
+                </div>
+                <div style="background: rgba(255,255,255,0.2); padding: 12px; border-radius: 50%;">
+                    <i data-lucide="trending-up"></i>
+                </div>
+            </div>
+
+            <form id="profileForm" onsubmit="saveProfile(event)">
+                <span class="label-text">PERSONAL & BUSINESS</span>
+                <div class="input-elegant-group"><i data-lucide="user" size="18"></i><input type="text" name="full_name" value="<%= user.full_name %>" placeholder="Full Name"></div>
+                <div class="input-elegant-group"><i data-lucide="warehouse" size="18"></i><input type="text" name="garage_name" value="<%= user.garage_name %>" placeholder="Garage Name"></div>
+                <div class="input-elegant-group"><i data-lucide="map-pin" size="18"></i><input type="text" name="garage_location" value="<%= user.garage_location %>" placeholder="Physical Address"></div>
+
+                <!-- EXPERTISE CHECKLIST SECTION -->
+                <span class="label-text" style="margin-top: 20px;">AREAS OF EXPERTISE</span>
+                <div class="expertise-grid">
+                    <% const areas = ['Engine Repair', 'Auto-Electrical', 'Brake Systems', 'Suspension', 'Paint & Body', 'AC Service', 'Japanese Cars', 'European Cars']; %>
+                    <% areas.forEach(area => { %>
+                        <label>
+                            <input type="checkbox" name="expertise" value="<%= area %>" class="expertise-item" 
+                            <%= user.expertise && user.expertise.includes(area) ? 'checked' : '' %>>
+                            <div class="expertise-label">
+                                <i data-lucide="check-circle" size="14"></i> <%= area %>
+                            </div>
+                        </label>
+                    <% }) %>
+                </div>
+
+                <button type="submit" class="btn-primary" style="width: 100%; margin-top: 35px; padding: 20px; border-radius: 18px; font-weight: 800; box-shadow: 0 10px 25px rgba(249, 115, 22, 0.3);">
+                    Save Profile Changes
+                </button>
+            </form>
+        </div>
+
+        <!-- REVIEWS SECTION -->
+        <h4 style="color: #1e293b; font-weight: 800; margin: 30px 0 15px 10px;">Reputation History</h4>
+        <% reviews.forEach((r, index) => { %>
+            <div class="review-card animate-item" style="animation-delay: <%= index * 0.1 %>s">
+                <div style="display: flex; justify-content: space-between;">
+                    <strong style="color: #0f172a;"><%= r.owner_name %></strong>
+                    <div style="color: #fbbf24; font-weight: 800;"><%= r.rating %> ★</div>
+                </div>
+                <p style="font-size: 13px; color: #64748b; margin-top: 8px;">"<%= r.feedback %>"</p>
+            </div>
+        <% }) %>
+    </div>
+
+    <script>
+        lucide.createIcons();
+
+        async function saveProfile(e) {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            
+            // Convert multiple checkboxes to an array/string
+            const expertise = Array.from(formData.getAll('expertise')).join(',');
+            const data = {
+                full_name: formData.get('full_name'),
+                garage_name: formData.get('garage_name'),
+                garage_location: formData.get('garage_location'),
+                expertise: expertise
+            };
+
+            const res = await fetch('/api/mechanic/update-profile', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+
+            if(res.ok) {
+                AppAlert.show("Profile Updated", "Your garage details and expertise are now live.", "success");
+            }
+        }
+    </script>
+</body>
+</html>

@@ -8,7 +8,6 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <link rel="stylesheet" href="/css/alerts.css">
     <script src="/js/alerts.js"></script>
-
     <style>
         /* Reusing and extending animations from Step 1 */
         .animate-fade-up {
@@ -115,11 +114,9 @@
             box-shadow: 0 0 15px var(--action-orange);
         }
     </style>
-
     
 </head>
-<body style="background: #f8fafc; padding-bottom: 50px;">
-
+<body>
     <!-- Consistent Header -->
     <div style="background: var(--primary-blue); padding: 35px 20px; color: white; border-radius: 0 0 30px 30px;">
         <div style="display: flex; align-items: center; justify-content: space-between;">
@@ -155,10 +152,13 @@
                         <div style="flex: 1;">
                             <div style="display: flex; align-items: center; gap: 8px;">
                                 <h4 style="margin: 0; color: #1e293b;"><%= mech.full_name %></h4>
-                                <div class="rating-pill"><i data-lucide="star" size="10" fill="currentColor"></i> 4.9</div>
+                                <div class="rating-pill">
+                                    <i data-lucide="star" size="10" fill="currentColor"></i> 
+                                    <%= Number(mech.avg_rating).toFixed(1) %> (<%= mech.review_count %>)
+                                </div>
                             </div>
                             <span class="specialty-tag">Engine & Oil Specialist</span>
-                            <p style="font-size: 12px; color: #64748b; margin-top: 5px;"><i data-lucide="map-pin" size="12"></i> 2.4 km away</p>
+                            <p style="font-size: 12px; color: #64748b; margin-top: 5px;"><i data-lucide="phone" size="12"></i> <%= mech.phone %></p>
                         </div>
                         <div class="check-mark"><i data-lucide="check" size="14"></i></div>
                     </div>

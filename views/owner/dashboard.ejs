@@ -50,8 +50,7 @@
         .profile-trigger:hover { background: rgba(255,255,255,0.2); }
     </style>
 </head>
-<body style="background: #f8fafc; padding-bottom: 90px;">
-
+<body>
     <!-- DYNAMIC HEADER -->
     <header class="header-gradient animate-item">
         <div style="display: flex; justify-content: space-between; align-items: flex-start;">
@@ -218,6 +217,61 @@
             }, () => {
                 document.getElementById('current-location').innerText = "Kampala, Uganda";
             });
+        }
+    </script>
+
+    <!-- RATING MODAL (Appears after job finish) -->
+    <div id="finish-modal" class="alert-overlay" style="display: none;">
+        <div class="alert-card animate-pop-in">
+            <div style="color: #fbbf24;"><i data-lucide="star" size="48" fill="#fbbf24"></i></div>
+            <h3 style="margin: 15px 0 5px 0;">Rate Your Experience</h3>
+            <p>How was the service provided by your mechanic?</p>
+
+            <!-- Interactive Stars -->
+            <div style="display: flex; justify-content: center; gap: 8px; margin: 20px 0;">
+                <% for(let i=1; i<=5; i++) { %>
+                    <i data-lucide="star" class="star-btn" onclick="selectRating(<%= i %>)" id="star-<%= i %>" style="cursor: pointer; color: #cbd5e1;"></i>
+                <% } %>
+            </div>
+
+            <textarea id="rating-feedback" placeholder="Optional: Tell us what you liked or what could be better..." 
+                      style="width: 100%; border: 1.5px solid #e2e8f0; border-radius: 12px; padding: 12px; font-family: inherit; height: 80px; outline: none; margin-bottom: 20px;"></textarea>
+
+            <button onclick="submitRating()" class="btn-primary" style="width: 100%;">Submit & Close</button>
+        </div>
+    </div>
+
+    <script>
+        let selectedStars = 0;
+        let currentActiveJobId = null;
+
+        socket.on('job_finished', (data) => {
+            if (data.ownerId == currentUserId) {
+                currentActiveJobId = data.jobId;
+                document.getElementById('finish-modal').style.display = 'flex';
+            }
+        });
+
+        function selectRating(n) {
+            selectedStars = n;
+            for(let i=1; i<=5; i++) {
+                const star = document.getElementById(`star-${i}`);
+                star.style.color = (i <= n) ? "#fbbf24" : "#cbd5e1";
+                star.setAttribute('fill', (i <= n) ? "#fbbf24" : "none");
+            }
+        }
+
+        async function submitRating() {
+            if(selectedStars === 0) return AppAlert.show("Required", "Please select a star rating", "warning");
+
+            const feedback = document.getElementById('rating-feedback').value;
+            await fetch('/api/owner/rate-mechanic', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ jobId: currentActiveJobId, rating: selectedStars, feedback: feedback })
+            });
+
+            location.reload(); // Refresh to clean dashboard
         }
     </script>
 </body>

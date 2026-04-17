@@ -54,101 +54,80 @@
         }
         .price-tag { color: var(--action-orange); font-weight: 800; font-size: 16px; }
 
-        /* Search & Filter Styles */
-        .search-input-group {
-            background: white; border: 1px solid #e2e8f0; border-radius: 12px;
-            padding: 10px 15px; display: flex; align-items: center; gap: 10px;
+        .stat-card-luxury {
+            background: rgba(255,255,255,0.03);
+            border: 1.5px solid rgba(255,255,255,0.08);
+            border-radius: 18px; padding: 15px; text-align: center;
+            transition: 0.3s cubic-bezier(0.16, 1, 0.3, 1);
         }
-        .search-input-group input {
-            border: none; outline: none; width: 100%; font-size: 14px;
-            color: #1e293b; font-weight: 600;
+        .stat-card-luxury:hover {
+            background: rgba(255,255,255,0.08);
+            border-color: var(--action-orange);
+            transform: translateY(-5px);
         }
-        .search-input-group input::placeholder { color: #94a3b8; }
-
-        .filter-select {
-            background: white; border: 1px solid #e2e8f0; border-radius: 12px;
-            padding: 10px 15px; font-size: 13px; font-weight: 700;
-            color: #1e293b; cursor: pointer; outline: none;
-        }
+        .stat-card-luxury p { font-size: 9px; font-weight: 900; opacity: 0.5; margin-bottom: 5px; }
+        .stat-card-luxury strong { font-size: 20px; font-family: 'Inter', sans-serif; }
     </style>
 </head>
 
-<body style="background: #f8fafc; padding-bottom: 100px;">
-
+<body>
     <!-- TOP HEADER -->
     <header class="mech-header">
-        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 25px;">
             <div>
-                <p style="opacity: 0.6; font-size: 12px; font-weight: 600;">Mechanic Portal</p>
-                <h2 style="font-size: 24px; font-weight: 800; margin-top: 5px;"><%= userName %></h2>
+                <p style="opacity: 0.6; font-size: 11px; font-weight: 800; letter-spacing: 1px;">MECHANIC PORTAL</p>
+                <h2 style="font-size: 26px; font-weight: 900;"><%= userName %></h2>
             </div>
-            <button id="duty-toggle" class="duty-status online" onclick="toggleDuty()">
-                <i data-lucide="power" size="14"></i> <span id="status-text">Online</span>
+            <button id="duty-toggle" class="duty-status online animate-pop" onclick="toggleDuty()">
+                <i data-lucide="power"></i> <span id="status-text">Online</span>
             </button>
         </div>
 
-        <!-- REVENUE STATS -->
+        <!-- NEW PROFESSIONAL STATS GRID -->
         <div class="stat-grid">
-            <div class="stat-pill-dark animate-item">
-                <p style="font-size: 10px; opacity: 0.5;">TODAY</p>
-                <strong style="font-size: 14px;">UGX <span id="stat-today">0</span></strong>
+            <div class="stat-card-luxury">
+                <p>TOTAL JOBS</p>
+                <strong id="stat-total-jobs" style="color: #22c55e;">0</strong>
             </div>
-            <div class="stat-pill-dark animate-item delay-1">
-                <p style="font-size: 10px; opacity: 0.5;">THIS WEEK</p>
-                <strong style="font-size: 14px;">UGX <span id="stat-week">0.0M</span></strong>
+            <div class="stat-card-luxury">
+                <p>ACTIVE</p>
+                <strong id="stat-active-jobs" style="color: #3b82f6;">0</strong>
             </div>
-            <div class="stat-pill-dark animate-item delay-2">
-                <p style="font-size: 10px; opacity: 0.5;">TOTAL JOBS</p>
-                <strong style="font-size: 14px; color: #22c55e;"><span id="stat-count">0</span></strong>
+            <div class="stat-card-luxury">
+                <p>RATING</p>
+                <strong id="stat-avg-rating" style="color: #fbbf24;">0.0 ★</strong>
             </div>
         </div>
     </header>
 
+    <!-- SEARCH & FILTER SECTION -->
+    <div style="padding: 15px 20px; background: white; border-bottom: 1px solid #e2e8f0;">
+        <div class="input-elegant-group" style="margin: 0; background: #f1f5f9;">
+            <i data-lucide="search" size="18" color="#94a3b8"></i>
+            <input type="text" id="dashboardSearch" placeholder="Search Plate or Job ID..." oninput="filterJobs()">
+        </div>
+    </div>
+
     <div style="padding: 0 20px;">
         <!-- TAB NAVIGATION -->
         <div class="tab-bar">
-            <button class="tab-item active" onclick="switchTab('sos', 0)">SOS <span id="badge-sos" class="badge" style="background: var(--emergency-red); color: white; padding: 2px 6px; border-radius: 6px; font-size: 10px;">0</span></button>
-            <button class="tab-item" onclick="switchTab('apps', 1)">Bookings <span id="badge-apps" class="badge" style="background: #3b82f6; color: white; padding: 2px 6px; border-radius: 6px; font-size: 10px;">0</span></button>
-            <button class="tab-item" onclick="switchTab('active', 2)">Active <span id="badge-active" class="badge" style="background: #22c55e; color: white; padding: 2px 6px; border-radius: 6px; font-size: 10px;">0</span></button>
-            <button class="tab-item" onclick="switchTab('done', 3)">History</button>
-        </div>
-
-        <!-- SEARCH & FILTER BAR -->
-        <div style="padding: 10px 20px; display: flex; gap: 10px;">
-            <div class="search-input-group" style="flex: 1;">
-                <i data-lucide="search" size="16"></i>
-                <input type="text" id="jobSearch" placeholder="Search Plate or Job ID..." oninput="filterLocalJobs()">
-            </div>
-            <select id="typeFilter" class="filter-select" onchange="filterLocalJobs()">
-                <option value="all">All Types</option>
-                <option value="sos">SOS</option>
-                <option value="maintenance">Maintenance</option>
-                <option value="towing">Towing</option>
-                <option value="engine">Engine</option>
-                <option value="battery">Battery</option>
-            </select>
+            <button class="tab-item" onclick="switchTab('sos', 0)">SOS <span id="badge-sos" class="badge" style="background: var(--emergency-red); color: white; padding: 2px 6px; border-radius: 6px; font-size: 10px;">0</span></button>
+            <button class="tab-item" onclick="switchTab('bookings', 1)">Bookings <span id="badge-bookings" class="badge" style="background: #3b82f6; color: white; padding: 2px 6px; border-radius: 6px; font-size: 10px;">0</span></button>
+            <button class="tab-item active" onclick="switchTab('active', 2)">Active <span id="badge-active" class="badge" style="background: #22c55e; color: white; padding: 2px 6px; border-radius: 6px; font-size: 10px;">0</span></button>
+            <button class="tab-item" onclick="switchTab('history', 3)">History</button>
         </div>
 
         <!-- DYNAMIC JOB SECTIONS -->
-        <div id="job-sections">
-            <!-- This container will be filled dynamically with Today/Yesterday/Older groups -->
+        <div id="dashboard-content" style="padding: 20px;">
+            <!-- Sections will be injected here -->
         </div>
     </div>
 
     <!-- MECHANIC BOTTOM NAV -->
     <nav class="bottom-nav">
-        <a href="/mechanic/dashboard" class="nav-item active">
-            <i data-lucide="layout-grid"></i>
-            <span>Jobs</span>
-        </a>
-        <a href="#" class="nav-item">
-            <i data-lucide="wallet"></i>
-            <span>Earnings</span>
-        </a>
-        <a href="/logout" class="nav-item">
-            <i data-lucide="log-out"></i>
-            <span>Logout</span>
-        </a>
+        <a href="/mechanic/dashboard" class="nav-item active"><i data-lucide="layout-grid"></i><span>Jobs</span></a>
+        <a href="/mechanic/profile" class="nav-item"><i data-lucide="user"></i><span>Profile</span></a>
+        <a href="/logout" class="nav-item"><i data-lucide="log-out"></i><span>Logout</span></a>
     </nav>
 
     <!-- PARTS APPROVAL MODAL -->
@@ -235,16 +214,173 @@
             socket.emit('mechanic_status_changed', { isOnline });
         }
 
-        let currentTab = 'sos';
+        let currentTab = 'active';
 
         // 2. TAB SWITCHING LOGIC
-        function switchTab(type, index) {
+        async function switchTab(type, index) {
             currentTab = type;
             const tabs = document.querySelectorAll('.tab-item');
             tabs.forEach(t => t.classList.remove('active'));
             tabs[index].classList.add('active');
             
-            refreshDashboard(); // Reload jobs for the selected tab
+            if(type === 'done') {
+                const res = await fetch('/api/mechanic/all-jobs');
+                const data = await res.json();
+                renderSection(data.history, 'dynamic-history-container'); // This uses your Today/Yesterday/Older grouping
+            } else {
+                refreshDashboard(); // Reload jobs for the selected tab
+            }
+        }
+
+        // 3. DYNAMIC RENDERER WITH GROUPING & ACCENTS
+        function renderSection(groupedJobs, containerId = 'dashboard-content') {
+            const container = document.getElementById(containerId);
+            container.innerHTML = '';
+
+            // Standard categories
+            const timeframes = ['Today', 'Yesterday', 'This Week', 'Last Week', 'Last Month', 'Older'];
+
+            // Group the specific tab's jobs by date
+            const sections = groupJobsByDate(groupedJobs); 
+
+            timeframes.forEach(time => {
+                if (!sections[time] || sections[time].length === 0) return;
+
+                // Date Header
+                const header = document.createElement('h5');
+                header.className = "section-label animate-item";
+                header.style = "margin: 25px 0 15px 0; color: #64748b;";
+                header.innerText = time;
+                container.appendChild(header);
+
+                sections[time].forEach(job => {
+                    const card = currentTab === 'history' ? renderHistoryCard(job) : renderJobCard(job);
+                    container.appendChild(card);
+                });
+            });
+            lucide.createIcons();
+        }
+
+        // RENDER JOB CARD - Extracted for reusability
+        function renderJobCard(job) {
+            const card = document.createElement('div');
+            const accentColor = job.sos_active ? "#ef4444" : "#3b82f6"; // Red for SOS, Blue for Booking
+            
+            card.className = "job-card-mech animate-item";
+            card.style.borderLeft = `6px solid ${accentColor}`;
+            card.setAttribute('data-search', `${job.plate_number} ${job.id}`.toLowerCase());
+
+            card.innerHTML = `
+                <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                    <div>
+                        <span style="font-size:10px; font-weight:800; color:#94a3b8;">JOB ID: #${job.id}</span>
+                        <h4 style="margin:2px 0;">${job.owner_name}</h4>
+                        <p style="font-size:12px; font-weight:700; color:${accentColor};">${job.plate_number}</p>
+                    </div>
+                    <span class="status-badge" style="background:${accentColor}15; color:${accentColor}; border:1px solid ${accentColor}30;">
+                        ${job.sos_active ? 'SOS' : 'BOOKING'}
+                    </span>
+                </div>
+
+                <div style="margin: 15px 0; padding: 12px; background: #f8fafc; border-radius: 12px;">
+                    <p style="font-size:11px; color:#94a3b8; font-weight:800;">CURRENT TASK</p>
+                    <span style="font-size:14px; font-weight:600;">${job.service_type}</span>
+                </div>
+
+                <!-- ACTION BUTTONS -->
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+                    <a href="tel:${job.owner_phone}" class="btn-outline" style="padding:10px; border-radius:10px; text-align:center; text-decoration:none; font-size:13px; font-weight:700; display:flex; align-items:center; justify-content:center; gap:5px;">
+                        <i data-lucide="phone" size="14"></i> Call
+                    </a>
+                    <a class="btn-navigate btn-outline" target="_blank" style="padding:10px; border-radius:10px; text-align:center; text-decoration:none; font-size:13px; font-weight:700; display:flex; align-items:center; justify-content:center; gap:5px;">
+                        <i data-lucide="map-pin" size="14"></i> Navigate
+                    </a>
+                    <button class="btn-primary" style="grid-column: span 2; margin-top:5px; background:${job.sos_active ? '#ef4444' : '#0f172a'};">
+                        ${job.status === 'accepted' ? 'Start Diagnosis' : 'Update Job Card'}
+                    </button>
+                </div>
+            `;
+
+            // Use the lat/lng sent directly from the owner's browser
+            const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${job.location_lat},${job.location_lng}`;
+            card.querySelector('.btn-navigate').href = mapsUrl;
+
+            // Ensure SOS jobs are explicitly accepted, not automatic
+            const primaryBtn = card.querySelector('.btn-primary');
+            if (job.sos_active && job.status === 'pending') {
+                primaryBtn.textContent = 'Accept SOS';
+                primaryBtn.onclick = function () {
+                    acceptJob(job.id);
+                };
+            } else {
+                primaryBtn.onclick = function () {
+                    location.href = '/mechanic/job/' + job.id;
+                };
+            }
+
+            return card;
+        }
+
+        // --- UPDATED RENDERER FOR HISTORY TAB ---
+        function renderHistoryCard(job) {
+            const card = document.createElement('div');
+            card.className = "job-card-mech history-card animate-item";
+            
+            // Greyed out look for history
+            card.style.borderLeft = "6px solid #64748b";
+            card.style.opacity = "0.9";
+            card.setAttribute('data-search', `${job.plate_number} ${job.id}`.toLowerCase());
+
+            card.innerHTML = `
+                <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                    <div>
+                        <span style="font-size:10px; font-weight:800; color:#94a3b8;">PAID RECORD • ID: #${job.id}</span>
+                        <h4 style="margin:2px 0; color:#1e293b;">${job.owner_name}</h4>
+                        <p style="font-size:12px; font-weight:600; color:#64748b;">${job.make} ${job.model} (${job.plate_number})</p>
+                    </div>
+                    <div style="text-align:right;">
+                        <span class="status-badge" style="background:#f1f5f9; color:#64748b;">FINISHED</span>
+                        <p style="color:#16a34a; font-weight:900; margin-top:5px;">UGX ${Number(job.total_price).toLocaleString()}</p>
+                    </div>
+                </div>
+
+                <div style="margin: 15px 0; padding: 12px; background: #f8fafc; border-radius: 12px; border: 1px solid #f1f5f9;">
+                    <p style="font-size:10px; color:#94a3b8; font-weight:800;">SERVICE RENDERED</p>
+                    <span style="font-size:13px; font-weight:600; color:#475569;">${job.service_type}</span>
+                </div>
+
+                <!-- VIEW SUMMARY INSTEAD OF UPDATE -->
+                <button onclick="location.href='/mechanic/job/${job.id}'" class="btn-primary" style="width:100%; background:#0f172a; border-radius:12px; font-weight:800;">
+                    <i data-lucide="eye" size="16"></i> View Service Summary
+                </button>
+            `;
+            return card;
+        }
+
+        // 4. SEARCH FILTER LOGIC
+        function filterJobs() {
+            const query = document.getElementById('dashboardSearch').value.toLowerCase();
+            const cards = document.querySelectorAll('.job-card-mech');
+            cards.forEach(card => {
+                const text = card.getAttribute('data-search');
+                card.style.display = text.includes(query) ? 'block' : 'none';
+            });
+        }
+
+        // 5. DATE GROUPING LOGIC (CLIENT SIDE)
+        function groupJobsByDate(jobs) {
+            const groups = { Today: [], Yesterday: [], 'This Week': [], 'Last Week': [], 'Last Month': [], Older: [] };
+            const now = new Date();
+            jobs.forEach(job => {
+                const date = new Date(job.created_at);
+                const diff = Math.floor((now - date) / (1000 * 60 * 60 * 24));
+                if (diff === 0) groups.Today.push(job);
+                else if (diff === 1) groups.Yesterday.push(job);
+                else if (diff < 7) groups['This Week'].push(job);
+                else if (diff < 30) groups['Last Month'].push(job);
+                else groups.Older.push(job);
+            });
+            return groups;
         }
 
         // Listen for the quote from the mechanic
@@ -293,29 +429,30 @@
 
         // Listen for real-time job updates
         socket.on('new_job_pushed', (job) => {
-            if(isOnline && (currentTab === 'sos' || currentTab === 'apps')) {
-                refreshDashboard(); // Refresh to show new job
+            if (isOnline) {
+                refreshDashboard(); // always refresh when a new job is pushed
                 new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3').play();
             }
         });
 
         // 3. Load all jobs on page load
         window.onload = async () => {
+            await loadStats();
             await refreshDashboard();
         };
 
-        // REAL-TIME SEARCH & FILTER
-        function filterLocalJobs() {
-            const query = document.getElementById('jobSearch').value.toLowerCase();
-            const type = document.getElementById('typeFilter').value.toLowerCase();
-            const cards = document.querySelectorAll('.job-card-mech');
-
-            cards.forEach(card => {
-                const matchesSearch = card.getAttribute('data-search').includes(query);
-                const matchesType = (type === 'all' || card.getAttribute('data-type').includes(type));
+        // Load mechanic stats
+        async function loadStats() {
+            try {
+                const res = await fetch('/api/mechanic/stats');
+                const stats = await res.json();
                 
-                card.style.display = (matchesSearch && matchesType) ? 'block' : 'none';
-            });
+                document.getElementById('stat-total-jobs').innerText = stats.totalJobs;
+                document.getElementById('stat-active-jobs').innerText = stats.activeJobs;
+                document.getElementById('stat-avg-rating').innerText = stats.rating + ' ★';
+            } catch (err) {
+                console.error('Error loading stats:', err);
+            }
         }
 
         function acceptJob(jobId) {
@@ -346,164 +483,33 @@
         async function refreshDashboard() {
             try {
                 const res = await fetch('/api/mechanic/all-jobs');
-                const data = await res.json();
+                const groupedJobs = await res.json();
                 
                 // Update badge counts
-                document.getElementById('badge-sos').innerText = data.sos?.length || 0;
-                document.getElementById('badge-apps').innerText = data.appointments?.length || 0;
-                document.getElementById('badge-active').innerText = data.active?.length || 0;
+                document.getElementById('badge-sos').innerText = groupedJobs.sos?.length || 0;
+                document.getElementById('badge-bookings').innerText = groupedJobs.bookings?.length || 0;
+                document.getElementById('badge-active').innerText = groupedJobs.active?.length || 0;
                 
-                // Update stats
-                document.getElementById('stat-count').innerText = data.history?.length || 0;
+                // Get the jobs for the current tab
+                let tabJobs = [];
+                if (currentTab === 'sos') {
+                    tabJobs = groupedJobs.sos || [];
+                } else if (currentTab === 'bookings') {
+                    tabJobs = groupedJobs.bookings || [];
+                } else if (currentTab === 'active') {
+                    tabJobs = groupedJobs.active || [];
+                } else if (currentTab === 'history') {
+                    tabJobs = groupedJobs.history || [];
+                }
                 
-                // Render jobs based on current tab
-                renderJobs(data);
+                // Render the section with grouping and filtering
+                renderSection(tabJobs);
+                
+                // Load updated stats
+                await loadStats();
             } catch (err) {
                 console.error('Error refreshing dashboard:', err);
             }
-        }
-
-        function renderJobs(data) {
-            const container = document.getElementById('job-sections');
-            container.innerHTML = '';
-            
-            let jobsToRender = [];
-            
-            if (currentTab === 'sos') {
-                jobsToRender = data.sos || [];
-            } else if (currentTab === 'apps') {
-                jobsToRender = data.appointments || [];
-            } else if (currentTab === 'active') {
-                jobsToRender = data.active || [];
-            } else if (currentTab === 'done') {
-                jobsToRender = data.history || [];
-            }
-            
-            // Render job cards
-            if (jobsToRender.length > 0) {
-                jobsToRender.forEach(job => {
-                    const cardHTML = createJobCardHTML(job, currentTab);
-                    container.innerHTML += cardHTML;
-                });
-            } else {
-                container.innerHTML = '<p style="text-align:center; padding:60px 0; color:#94a3b8; font-weight: 600;"><i data-lucide="inbox" size="48" style="margin-bottom:15px; opacity:0.3;"></i><br>No jobs in this category.</p>';
-            }
-            
-            lucide.createIcons();
-        }
-
-        function createJobCardHTML(job, tabType) {
-            if (tabType === 'sos') {
-                // SOS job card - urgent styling
-                return `
-                    <div class="job-card-mech animate-card" style="border-left: 5px solid #ef4444; background: #fff1f2;" 
-                         data-search="${(job.plate_number + ' ' + job.id).toLowerCase()}" 
-                         data-type="${job.service_type.toLowerCase()}">
-                        <div style="display: flex; justify-content: space-between;">
-                            <div>
-                                <h4 style="margin: 0;">${job.owner_name}</h4>
-                                <p style="font-size: 12px; color: #64748b;">${job.make} ${job.model} (${job.plate_number})</p>
-                            </div>
-                            <span class="status-badge" style="background:#fecaca; color:#991b1b;">🚨 SOS</span>
-                        </div>
-                        <p style="margin: 15px 0; font-weight: 700; color: #ef4444;">${job.service_type}</p>
-                        <button onclick="acceptJob(${job.id})" class="btn-primary" style="width: 100%; background: #ef4444;">Accept Emergency</button>
-                    </div>
-                `;
-            } else if (tabType === 'apps') {
-                // Appointment card with approve/decline
-                return `
-                    <div class="job-card-mech animate-card" 
-                         data-search="${(job.plate_number + ' ' + job.id).toLowerCase()}" 
-                         data-type="${job.service_type.toLowerCase()}">
-                        <div style="display:flex; justify-content:space-between;">
-                            <h4 style="margin:0;">${job.owner_name}</h4>
-                            <span class="status-badge" style="background:#eff6ff; color:#1d4ed8;">APPOINTMENT</span>
-                        </div>
-                        <p style="font-size:12px; color:#64748b; margin:10px 0;">${job.make} ${job.model} • ${job.service_type}</p>
-                        <div style="display:flex; gap:10px;">
-                            <button onclick="respondApp(${job.id}, 'cancelled')" class="btn-outline" style="flex:1; border-color:#fecaca; color:#ef4444;">Decline</button>
-                            <button onclick="respondApp(${job.id}, 'accepted')" class="btn-primary" style="flex:1;">Accept</button>
-                        </div>
-                    </div>
-                `;
-            } else if (tabType === 'active') {
-                // Active job card with status badge
-                let statusColor = '#3b82f6';
-                if(job.status === 'diagnosing') statusColor = '#8b5cf6';
-                if(job.status === 'fixing') statusColor = '#22c55e';
-                
-                // Workflow Button Logic
-                let actionBtn = '';
-                if (job.status === 'accepted') {
-                    actionBtn = `<button onclick="verifyJob(${job.id})" class="btn-primary" style="width: 100%; background:#3b82f6;">I have reached the Car</button>`;
-                } else {
-                    actionBtn = `<button onclick="location.href='/mechanic/job/${job.id}'" class="btn-primary" style="width: 100%; border-radius: 14px; background: #0f172a; display: flex; align-items: center; justify-content: center; gap: 10px;"><i data-lucide="external-link" size="18"></i> Update Repair</button>`;
-                }
-                
-                return `
-                    <div class="job-card-mech animate-card" 
-                         data-search="${(job.plate_number + ' ' + job.id).toLowerCase()}" 
-                         data-type="${job.service_type.toLowerCase()}">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                            <span style="font-size: 10px; font-weight: 800; color: #64748b; letter-spacing: 0.5px;">JOB ID: #${job.id}</span>
-                            <span style="background:${statusColor}20; color:${statusColor}; font-size:10px; padding:4px 10px; border-radius:20px; font-weight:900; text-transform:uppercase;">
-                                ${job.status}
-                            </span>
-                        </div>
-                        <div style="margin-bottom: 12px;">
-                            <h4 style="margin: 0; color: #1e293b;">${job.owner_name}</h4>
-                            <p style="font-size: 13px; font-weight: 700; color: var(--action-orange); margin-top: 2px;">
-                                ${job.make} ${job.model} (${job.plate_number})
-                            </p>
-                        </div>
-                        <div style="margin: 15px 0; padding: 12px; background: #f8fafc; border-radius: 12px; border: 1px solid #f1f5f9;">
-                            <p style="font-size: 11px; color: #94a3b8; font-weight: 800; margin-bottom: 5px;">ISSUE TO FIX</p>
-                            <span style="font-size: 14px; font-weight: 600; color: #334155;">${job.service_type}</span>
-                        </div>
-                        ${actionBtn}
-                    </div>
-                `;
-            } else if (tabType === 'done') {
-                // History card - clickable
-                return `
-                    <div class="job-card-mech animate-card" onclick="location.href='/mechanic/job/${job.id}'" style="opacity:0.8; cursor: pointer;" 
-                         data-search="${(job.plate_number + ' ' + job.id).toLowerCase()}" 
-                         data-type="${job.service_type.toLowerCase()}">
-                        <div style="display: flex; justify-content: space-between;">
-                            <strong>Job #${job.id}</strong>
-                            <span class="status-badge" style="background:#dcfce7; color:#15803d;">✓ Completed</span>
-                        </div>
-                        <p style="font-size:12px; margin-top:5px;">${job.owner_name} • ${job.service_type}</p>
-                        <p style="font-size: 13px; color: #64748b; margin-top: 8px;">Total: UGX ${(job.total_price || 0).toLocaleString()}</p>
-                    </div>
-                `;
-            }
-        }
-
-        function verifyJob(jobId) {
-            AppAlert.confirm(
-                "Verify Problem?", 
-                "Press this once you have inspected the car and confirmed the issue with the owner.", 
-                async () => {
-                    try {
-                        await fetch('/api/mechanic/verify-problem', { 
-                            method: 'POST', 
-                            headers: {'Content-Type': 'application/json'},
-                            body: JSON.stringify({ jobId }) 
-                        });
-                        AppAlert.show(
-                            "Problem Verified", 
-                            "Checklist is now active on both your views.", 
-                            "success"
-                        );
-                        refreshDashboard();
-                    } catch (err) {
-                        console.error('Error verifying job:', err);
-                        AppAlert.show("Error", "Could not verify the problem. Please try again.", "error");
-                    }
-                }
-            );
         }
     </script>
 </body>

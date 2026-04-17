@@ -10,6 +10,8 @@
     <script src="/js/alert.js"></script>
 </head>
 <body style="background: var(--emergency-red); color: white;">
+        <%- include('../partials/back-nav') %>
+
 
     <div style="padding: 40px 20px; text-align: center;">
         <i data-lucide="alert-octagon" size="60" style="margin-bottom: 20px;"></i>
@@ -34,8 +36,8 @@
 
             <!-- Waiting Screen (Hidden by default) -->
             <div id="waiting-screen" style="display: none; text-align: center; padding: 40px 0;">
-                <div class="pulse-loader"></div>
-                <h2 style="color: #1e293b;">Finding Mechanic...</h2>
+                <div id="status-indicator" class="pulse-loader"></div>
+                <h2 id="wait-title" style="color: #1e293b;">Finding Mechanic...</h2>
                 <p id="comfort-msg" style="color: #64748b; margin: 15px 0;">Connecting you to the nearest expert.</p>
                 <button onclick="cancelSOS()" style="background: none; border: 1px solid #cbd5e1; padding: 10px 20px; border-radius: 8px; color: #64748b; margin-top: 40px;">Cancel Request</button>
             </div>
@@ -169,41 +171,52 @@
         let msgIndex = 0;
         let myJobId = null; // Store the job ID returned from server
 
+        // --- UPDATED SOS TRIGGER LOGIC ---
         function sendSOS(issue) {
             const selectedVehicle = document.getElementById('sos-vehicle-id').value;
-            
+            const statusMsg = document.getElementById('comfort-msg');
+
             if(!selectedVehicle) {
-                alert("Please register or select a car first!");
+                AppAlert.show("Car Required", "Please select which car needs help.", "warning");
                 return;
             }
 
-            document.getElementById('selection-screen').style.display = 'none';
-            document.getElementById('waiting-screen').style.display = 'block';
+            // 1. PROMPT FOR EXACT LOCATION
+            statusMsg.innerText = "🛰️ Pinpointing your exact location...";
             
-            // Now sending vehicle_id so server can fetch fuel/tyre details
-            socket.emit('emergency_sos', { 
-                issue: issue, 
-                ownerName: "<%= userName %>",
-                vehicleId: selectedVehicle 
-            });
-            
-            // Cycle comforting messages
-            setInterval(() => {
-                document.getElementById('comfort-msg').innerText = messages[msgIndex % messages.length];
-                msgIndex++;
-            }, 4000);
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        const lat = position.coords.latitude;
+                        const lng = position.coords.longitude;
+
+                        // 2. SWITCH TO WAITING UI
+                        document.getElementById('selection-screen').style.display = 'none';
+                        document.getElementById('waiting-screen').style.display = 'block';
+
+                        // 3. SEND SOS WITH GPS TO SERVER
+                        socket.emit('emergency_sos', { 
+                            issue: issue, 
+                            ownerName: "<%= userName %>",
+                            vehicleId: selectedVehicle,
+                            lat: lat,
+                            lng: lng
+                        });
+                    },
+                    (error) => {
+                        AppAlert.show("GPS Error", "We need your location to send a mechanic. Please enable GPS.", "error");
+                    },
+                    { enableHighAccuracy: true } // Forces the phone to use GPS, not just WiFi
+                );
+            } else {
+                AppAlert.show("Not Supported", "Your browser does not support location tracking.", "error");
+            }
         }
 
-        // Listen for SOS confirmation with availability info
+        // --- FIX: STATE TRANSITION FOR SOS CONFIRMATION ---
         socket.on('sos_confirmed', (data) => {
-            myJobId = data.jobId;
-            console.log(`SOS Job Created: ${myJobId} | ${data.availableMechanics} mechanic(s) online`);
-            
-            // Warn owner if no mechanics are available
-            if (data.noMechanicsWarning) {
-                document.getElementById('comfort-msg').innerText = "⚠️ No mechanics online right now. We'll notify them when they come online.";
-                document.getElementById('comfort-msg').style.color = "#f59e0b"; // Warning yellow
-            }
+            window.myJobId = data.jobId; // Set global ID so we know which job is ours
+            console.log("SOS Saved in DB. Tracking ID:", window.myJobId);
         });
 
         function cancelSOS() {
@@ -212,26 +225,23 @@
         }
         
         socket.on('job_taken', (data) => {
-            // 1. Check if the accepted job is MINE
-            if (data.jobId == myJobId) {
+            // CRITICAL CHECK: Does the incoming 'Accept' signal match my active SOS ID?
+            if (data.jobId == window.myJobId) {
+                console.log("Mechanic accepted my job!");
                 
-                // 2. Change background to Green
+                // 1. Transform UI to Green
                 document.body.classList.add('help-arriving');
+                
+                // 2. Hide waiting spinner, update title, hide comfort text
+                document.getElementById('status-indicator').style.display = 'none';
+                document.getElementById('wait-title').innerText = "Mechanic is Coming!";
+                document.getElementById('comfort-msg').style.display = 'none';
 
-                // 3. Hide waiting screen
-                document.getElementById('waiting-screen').style.display = 'none';
-
-                // 4. Show Enhanced Mechanic Profile
+                // 3. Populate Mechanic Data
                 document.getElementById('mech-name').innerText = data.mechanicName;
                 document.getElementById('mech-jobs').innerText = data.jobsDone + " Jobs Done";
-                if (data.mechanicRating) {
-                    document.getElementById('mech-rating').innerText = data.mechanicRating;
-                }
                 document.getElementById('mech-call-link').href = "tel:" + data.mechanicPhone;
                 document.getElementById('accepted-ui').style.display = 'block';
-                
-                // Play success sound
-                new Audio('https://assets.mixkit.co/active_storage/sfx/1435/1435-preview.mp3').play();
                 
                 lucide.createIcons();
             }

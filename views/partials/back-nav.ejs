@@ -1,0 +1,56 @@
+<!-- REUSABLE BACK NAVIGATION -->
+<div class="back-nav-container animate-header">
+    <button onclick="handleBackNavigation()" class="btn-back-circle">
+        <i data-lucide="arrow-left" size="22"></i>
+    </button>
+</div>
+
+<style>
+    .back-nav-container {
+        position: absolute;
+        top: 25px;
+        left: 20px;
+        z-index: 1000;
+    }
+    .btn-back-circle {
+        background: rgba(255, 255, 255, 0.15);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        color: white;
+        width: 48px;
+        height: 48px;
+        border-radius: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.1);
+    }
+    .btn-back-circle:hover {
+        background: rgba(255, 255, 255, 0.25);
+        transform: translateX(-3px);
+    }
+    .btn-back-circle:active {
+        transform: scale(0.9);
+    }
+</style>
+
+<script>
+    function handleBackNavigation() {
+        // Smoothly fade out the current body before navigating
+        document.body.style.opacity = '0';
+        document.body.style.transition = 'opacity 0.3s ease';
+        
+        setTimeout(() => {
+            // Checks if there is history, otherwise goes to dashboard as fallback
+            if (window.history.length > 1) {
+                window.history.back();
+            } else {
+                // Determine if user is owner or mechanic to go to right dashboard
+                window.location.href = '/'; 
+            }
+        }, 200);
+    }
+</script>

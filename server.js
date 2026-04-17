@@ -97,7 +97,6 @@ function groupJobsByDate(jobs) {
 }
 
 // --- ROUTES ---
-
 // Landing Page Route
 app.get('/', (req, res) => {
     res.render('index'); // This will look for views/index.ejs
@@ -111,6 +110,11 @@ app.get('/login', (req, res) => {
 // Route to show Signup Page
 app.get('/signup', (req, res) => {
     res.render('signup');
+});
+
+// Admin Contact Page Route
+app.get('/admin-contact', (req, res) => {
+    res.render('admin-contact');
 });
 
 // POST Route to handle Signup Logic
@@ -422,24 +426,32 @@ app.get('/owner/diagnostics', isAuthenticated, async (req, res) => {
 
 // --- STEP 2: SHOW MECHANICS (RECEIVE POST FROM STEP 1) ---
 app.post('/owner/select-mechanic', isAuthenticated, async (req, res) => {
-    // 1. Get the data submitted from Step 1
     const { vehicle_id, service_type, scheduled_date } = req.body;
 
     try {
-        // 2. Fetch all mechanics from the database to display in Step 2
-        const result = await db.query("SELECT id, full_name, phone FROM users WHERE role = 'mechanic'");
+        // SMART FILTERING LOGIC
+        // It looks for mechanics whose 'expertise' column contains the 'service_type' string
+        const mechanicQuery = `
+            SELECT u.*, 
+                   COALESCE(AVG(r.rating), 0) as avg_rating,
+                   COUNT(r.id) as review_count
+            FROM users u 
+            LEFT JOIN reviews r ON u.id = r.mechanic_id
+            WHERE u.role = 'mechanic' AND u.is_online = true
+            AND (u.expertise ILIKE $1 OR u.expertise IS NULL) -- Filter by expertise
+            GROUP BY u.id
+            ORDER BY avg_rating DESC
+        `;
         
-        // 3. Render Step 2 (Select Mechanic) and pass all the data
+        // We look for parts of the string, e.g., '%Engine%'
+        const filter = `%${service_type.split(' ')[0]}%`; 
+        const result = await db.query(mechanicQuery, [filter]);
+
         res.render('owner/select-mechanic', { 
-            vehicle_id, 
-            service_type, 
-            scheduled_date, 
+            vehicle_id, service_type, scheduled_date, 
             mechanics: result.rows 
         });
-    } catch (err) {
-        console.error("Error in Step 2:", err);
-        res.status(500).send("Could not load mechanics.");
-    }
+    } catch (err) { console.error(err); }
 });
 
 // --- FINAL STEP: CONFIRM & SAVE JOB ---
@@ -573,6 +585,82 @@ app.get('/mechanic/dashboard', isAuthenticated, (req, res) => {
     });
 });
 
+// GET: MECHANIC EARNINGS PAGE
+app.get('/mechanic/earnings', isAuthenticated, async (req, res) => {
+    const mechId = req.session.userId;
+
+    try {
+        // Completed jobs for this mechanic with vehicle info
+        const jobsRes = await db.query(
+            `SELECT j.id,
+                    j.service_type,
+                    j.total_price,
+                    j.updated_at,
+                    v.model
+             FROM jobs j
+             JOIN vehicles v ON j.vehicle_id = v.id
+             WHERE j.mechanic_id = $1
+               AND j.status = 'completed'
+               AND j.total_price IS NOT NULL
+             ORDER BY j.updated_at DESC`,
+            [mechId]
+        );
+        const jobs = jobsRes.rows;
+
+        // Today’s earnings
+        const todayRes = await db.query(
+            `SELECT COALESCE(SUM(total_price), 0) AS today
+             FROM jobs
+             WHERE mechanic_id = $1
+               AND status = 'completed'
+               AND total_price IS NOT NULL
+               AND DATE(updated_at) = CURRENT_DATE`,
+            [mechId]
+        );
+        const todayEarnings = todayRes.rows[0].today;
+
+        // Total (or “this week”) earnings
+        const totalRes = await db.query(
+            `SELECT COALESCE(SUM(total_price), 0) AS total
+             FROM jobs
+             WHERE mechanic_id = $1
+               AND status = 'completed'
+               AND total_price IS NOT NULL`,
+            [mechId]
+        );
+        const totalEarnings = totalRes.rows[0].total;
+
+        res.render('mechanic/earnings', {
+            todayEarnings,
+            totalEarnings,
+            jobs
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).send('Error loading earnings');
+    }
+});
+
+// --- GET: MECHANIC PROFILE ---
+app.get('/mechanic/profile', isAuthenticated, async (req, res) => {
+    try {
+        const userRes = await db.query('SELECT * FROM users WHERE id = $1', [req.session.userId]);
+        const reviewsRes = await db.query(`
+            SELECT r.*, u.full_name as owner_name 
+            FROM reviews r JOIN users u ON r.owner_id = u.id 
+            WHERE r.mechanic_id = $1 ORDER BY r.created_at DESC`, [req.session.userId]);
+        
+        // Earnings summary for the profile page
+        const earningsRes = await db.query("SELECT SUM(total_price) FROM jobs WHERE mechanic_id = $1 AND status = 'completed'", [req.session.userId]);
+
+        res.render('mechanic/profile', { 
+            user: userRes.rows[0], 
+            reviews: reviewsRes.rows,
+            totalEarnings: earningsRes.rows[0].sum || 0
+        });
+    } catch (err) { res.status(500).send("Error"); }
+});
+
 // Logout Route
 app.get('/logout', (req, res) => {
     req.session.destroy();
@@ -631,6 +719,17 @@ app.get('/logout', (req, res) => {
     app.post('/api/mechanic/check-task', isAuthenticated, async (req, res) => {
         try {
             const { taskId, isCompleted } = req.body;
+
+            // Check if the job linked to this task is already completed
+            const statusRes = await db.query(`
+                SELECT j.status FROM jobs j 
+                JOIN job_checklists c ON j.id = c.job_id 
+                WHERE c.id = $1`, [taskId]);
+
+            if (statusRes.rows[0].status === 'completed') {
+                return res.status(403).json({ error: "Cannot edit completed jobs." });
+            }
+
             await db.query(
                 'UPDATE job_checklists SET is_completed = $1, completed_at = $2 WHERE id = $3',
                 [isCompleted, isCompleted ? new Date() : null, taskId]
@@ -642,31 +741,51 @@ app.get('/logout', (req, res) => {
         }
     });
 
+    // --- API: SUBMIT RATING ---
+    app.post('/api/owner/rate-mechanic', isAuthenticated, async (req, res) => {
+        const { jobId, rating, feedback } = req.body;
+        try {
+            // 1. Get the mechanic_id for this job
+            const jobRes = await db.query('SELECT mechanic_id FROM jobs WHERE id = $1', [jobId]);
+            const mechanicId = jobRes.rows[0].mechanic_id;
+
+            // 2. Insert the review
+            await db.query(
+                'INSERT INTO reviews (job_id, mechanic_id, owner_id, rating, feedback) VALUES ($1, $2, $3, $4, $5)',
+                [jobId, mechanicId, req.session.userId, rating, feedback]
+            );
+
+            res.json({ success: true });
+        } catch (err) { console.error(err); res.status(500).send("Error saving rating"); }
+    });
+
+    // --- HELPER: GET MECHANIC AVG RATING ---
+    async function getMechanicRating(mechId) {
+        const res = await db.query('SELECT AVG(rating) as average FROM reviews WHERE mechanic_id = $1', [mechId]);
+        const avg = parseFloat(res.rows[0].average) || 0;
+        return avg.toFixed(1);
+    }
+
     // --- UPDATED API: FETCH ACTIVE WORK QUEUE ---
+    // --- UPDATED MECHANIC STATS API ---
     app.get('/api/mechanic/stats', isAuthenticated, async (req, res) => {
         const mechId = req.session.userId;
         try {
-            // 1. Current Work Queue (Accepted, Diagnosing, or Fixing)
-            const activeJobsRes = await db.query(`
-                SELECT j.*, u.full_name as owner_name, v.make, v.model, v.plate_number 
-                FROM jobs j 
-                JOIN users u ON j.owner_id = u.id 
-                JOIN vehicles v ON j.vehicle_id = v.id 
-                WHERE j.mechanic_id = $1 AND j.status NOT IN ('pending', 'completed')
-                ORDER BY j.updated_at DESC`, 
-                [mechId]
-            );
+            // 1. Total Completed Jobs
+            const totalRes = await db.query("SELECT COUNT(*) FROM jobs WHERE mechanic_id = $1 AND status = 'completed'", [mechId]);
+            
+            // 2. Active Jobs Count (Jobs currently being worked on)
+            const activeRes = await db.query("SELECT COUNT(*) FROM jobs WHERE mechanic_id = $1 AND status IN ('accepted', 'diagnosing', 'fixing')", [mechId]);
 
-            // 2. Earnings and Counters
-            const todayRes = await db.query("SELECT SUM(total_price) FROM jobs WHERE mechanic_id = $1 AND status = 'completed' AND updated_at >= CURRENT_DATE", [mechId]);
-            const totalJobsRes = await db.query("SELECT COUNT(*) FROM jobs WHERE mechanic_id = $1 AND status = 'completed'", [mechId]);
+            // 3. Average Rating
+            const ratingRes = await db.query("SELECT AVG(rating) as avg FROM reviews WHERE mechanic_id = $1", [mechId]);
 
             res.json({
-                activeJobs: activeJobsRes.rows,
-                todayEarnings: todayRes.rows[0].sum || 0,
-                completedCount: totalJobsRes.rows[0].count
+                totalJobs: totalRes.rows[0].count,
+                activeJobs: activeRes.rows[0].count,
+                rating: parseFloat(ratingRes.rows[0].avg || 0).toFixed(1)
             });
-        } catch (err) { console.error(err); res.status(500).send("Stats Error"); }
+        } catch (err) { res.status(500).send(err.message); }
     });
 
     // API: Get Pending Jobs (for mechanic dashboard on page load)
@@ -674,7 +793,7 @@ app.get('/logout', (req, res) => {
         try {
             const result = await db.query(`
                 SELECT j.*, u.full_name as owner_name, u.phone as owner_phone,
-                       v.make, v.model, v.plate_number, v.fuel_type, v.tyre_size
+                    v.make, v.model, v.plate_number, v.fuel_type, v.tyre_size
                 FROM jobs j
                 JOIN users u ON j.owner_id = u.id
                 JOIN vehicles v ON j.vehicle_id = v.id
@@ -688,26 +807,37 @@ app.get('/logout', (req, res) => {
         }
     });
 
-    // --- 2. UPDATED JOB FETCHING (Separating Appointments) ---
+    // --- UPDATED MECHANIC DATA API ---
     app.get('/api/mechanic/all-jobs', isAuthenticated, async (req, res) => {
         const mechId = req.session.userId;
         try {
-            const result = await db.query(`
-                SELECT j.*, u.full_name as owner_name, v.make, v.model, v.plate_number 
-                FROM jobs j 
-                JOIN users u ON j.owner_id = u.id 
-                JOIN vehicles v ON j.vehicle_id = v.id 
-                WHERE j.mechanic_id = $1 OR (j.status = 'pending' AND j.mechanic_id IS NULL)
-                ORDER BY j.created_at DESC`, [mechId]);
-
+            const query = `
+                SELECT j.*, 
+                    u.full_name as owner_name, u.phone as owner_phone, u.location_lat, u.location_lng,
+                    v.make, v.model, v.plate_number 
+            FROM jobs j 
+            JOIN users u ON j.owner_id = u.id 
+            JOIN vehicles v ON j.vehicle_id = v.id 
+            WHERE j.mechanic_id = $1 OR (j.status = 'pending' AND j.mechanic_id IS NULL)
+            ORDER BY j.created_at DESC`;
+        
+            const result = await db.query(query, [mechId]);
             const jobs = result.rows;
+
             res.json({
-                sos: jobs.filter(j => j.status === 'pending' && j.sos_active),
-                appointments: jobs.filter(j => j.status === 'pending' && !j.sos_active),
+                // SOS: all non‑completed SOS jobs (pending + in‑progress)
+                sos: jobs.filter(j => j.sos_active && j.status !== 'completed'),
+                // Bookings: all non‑completed non‑SOS jobs (pending + in‑progress)
+                bookings: jobs.filter(j => !j.sos_active && j.status !== 'completed'),
+                // Active: any job currently in progress (SOS or booking)
                 active: jobs.filter(j => ['accepted', 'diagnosing', 'fixing'].includes(j.status)),
+                // Completed history
                 history: jobs.filter(j => j.status === 'completed')
             });
-        } catch (err) { res.status(500).send(err.message); }
+        } catch (err) {
+            console.error(err);
+            res.status(500).send("Error");
+        }
     });
 
     // --- NEW ACTION: VERIFY PROBLEM (Generates Checklist) ---
@@ -755,6 +885,18 @@ app.get('/logout', (req, res) => {
         const { isOnline } = req.body;
         try {
             await db.query('UPDATE users SET is_online = $1 WHERE id = $2', [isOnline, req.session.userId]);
+            res.json({ success: true });
+        } catch (err) { res.status(500).send(err.message); }
+    });
+
+    // --- UPDATE MECHANIC PROFILE ---
+    app.post('/api/mechanic/update-profile', isAuthenticated, async (req, res) => {
+        const { full_name, garage_name, garage_location, expertise } = req.body;
+        try {
+            await db.query(
+                'UPDATE users SET full_name=$1, garage_name=$2, garage_location=$3, expertise=$4 WHERE id=$5',
+                [full_name, garage_name, garage_location, expertise, req.session.userId]
+            );
             res.json({ success: true });
         } catch (err) { res.status(500).send(err.message); }
     });
@@ -911,46 +1053,38 @@ io.on('connection', async (socket) => {
         }
     });
 
-    // --- NEW SOS HANDLER WITH PERSISTENCE ---
+    // --- SOS HANDLER WITH GPS COORDINATES ---
     socket.on('emergency_sos', async (data) => {
         try {
-            // 1. Check how many mechanics are currently online
-            const onlineMechs = await db.query(
-                "SELECT id, full_name FROM users WHERE role = 'mechanic' AND is_online = true"
-            );
-            const onlineCount = onlineMechs.rows.length;
+            const userId = socket.request.session.userId;
             
-            console.log(`🚨 SOS Triggered | ${onlineCount} online mechanic(s) available`);
-
-            // 2. Fetch the technical details for the specific car selected
-            const vehicleRes = await db.query('SELECT * FROM vehicles WHERE id = $1', [data.vehicleId]);
-            const car = vehicleRes.rows[0];
-
-            // 3. Fetch owner's phone
-            const userRes = await db.query('SELECT phone FROM users WHERE id = $1', [socket.request.session.userId]);
-            const phone = userRes.rows[0].phone;
-
-            // 4. Save the job
+            // 1. Save Job with the EXACT coordinates provided by the owner's GPS
             const newJob = await db.query(
                 'INSERT INTO jobs (owner_id, vehicle_id, service_type, status, sos_active) VALUES ($1, $2, $3, $4, $5) RETURNING id',
-                [socket.request.session.userId, car.id, data.issue, 'pending', true]
+                [userId, data.vehicleId, data.issue, 'pending', true]
             );
-
             const jobId = newJob.rows[0].id;
 
-            // 5. Tell the sender (Owner) their Job ID and availability status
-            socket.emit('sos_confirmed', { 
-                jobId: jobId,
-                availableMechanics: onlineCount,
-                noMechanicsWarning: onlineCount === 0
-            });
+            // 2. Confirm to the Owner so they can start listening for 'job_taken'
+            socket.emit('sos_confirmed', { jobId: jobId });
 
-            // 6. Broadcast to online mechanics only (via room)
-            if (onlineCount > 0) {
-                broadcastJob(jobId);
-            } else {
-                console.log('⚠️ Warning: No mechanics online to receive SOS');
-            }
+            // 3. Fetch full details for the mechanics (including the new Lat/Lng)
+            const carRes = await db.query('SELECT * FROM vehicles WHERE id = $1', [data.vehicleId]);
+            const car = carRes.rows[0];
+
+            // 4. PUSH TO MECHANICS
+            io.emit('new_job_pushed', {
+                id: jobId,
+                owner_name: data.ownerName,
+                make: car.make,
+                model: car.model,
+                plate_number: car.plate_number,
+                service_type: data.issue,
+                sos_active: true,
+                // SEND EXACT GPS
+                location_lat: data.lat,
+                location_lng: data.lng
+            });
 
         } catch (err) { console.error(err); }
     });

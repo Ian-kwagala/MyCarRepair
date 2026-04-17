@@ -21,7 +21,7 @@ CREATE TABLE vehicles (
     last_service_date DATE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
-CREATE TYPE job_status AS ENUM ('pending', 'accepted', 'diagnosing', 'fixing', 'ready', 'completed');
+-- CREATE TYPE job_status AS ENUM ('pending', 'accepted', 'diagnosing', 'fixing', 'ready', 'completed');
 
 CREATE TABLE jobs (
     id SERIAL PRIMARY KEY,
@@ -53,8 +53,23 @@ CREATE TABLE parts_quotes (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE reviews (
+    id SERIAL PRIMARY KEY,
+    job_id INTEGER REFERENCES jobs(id) ON DELETE CASCADE,
+    mechanic_id INTEGER REFERENCES users(id),
+    owner_id INTEGER REFERENCES users(id),
+    rating INTEGER CHECK (rating >= 1 AND rating <= 5),
+    feedback TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- ALTER TABLE vehicles ADD COLUMN transmission VARCHAR(20);
 -- ALTER TABLE vehicles ADD COLUMN tyre_size VARCHAR(20);
 -- ALTER TABLE vehicles ADD COLUMN color VARCHAR(30);
 -- ALTER TABLE vehicles ADD COLUMN mileage INTEGER;
 -- ALTER TABLE vehicles ADD COLUMN photos TEXT; -- We will store image paths as a string
+
+-- Mechanic profile fields
+ALTER TABLE users ADD COLUMN garage_name VARCHAR(100);
+ALTER TABLE users ADD COLUMN garage_location VARCHAR(100);
+ALTER TABLE users ADD COLUMN expertise TEXT;

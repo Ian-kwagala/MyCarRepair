@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Earnings | MyCarRepair</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .revenue-hero {
+            background: #064e3b; color: white; padding: 40px 20px;
+            border-radius: 0 0 30px 30px; text-align: center;
+            box-shadow: 0 10px 30px rgba(6, 78, 59, 0.2);
+        }
+        .earnings-card {
+            background: white; border-radius: 20px; padding: 20px; margin-bottom: 12px;
+            border: 1.5px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center;
+            animation: slideUp 0.5s ease-out both;
+        }
+        .price-green { color: #16a34a; font-weight: 900; font-size: 18px; }
+        .date-badge { font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; }
+    </style>
+</head>
+<body >
+    <%- include('../partials/back-nav') %>
+
+    <!-- TOP REVENUE SUMMARY -->
+    <div class="revenue-hero">
+        <p style="opacity: 0.7; font-size: 13px; font-weight: 700; letter-spacing: 1px;">TOTAL EARNINGS TODAY</p>
+        <h1 style="font-size: 42px; margin: 10px 0;">UGX <%= Number(todayEarnings).toLocaleString() %></h1>
+        
+        <div style="display: flex; gap: 10px; margin-top: 25px;">
+            <div style="flex: 1; background: rgba(255,255,255,0.1); padding: 15px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.1);">
+                <p style="font-size: 10px; opacity: 0.6;">THIS WEEK</p>
+                <strong style="font-size: 16px;">UGX <%= (Number(totalEarnings)).toLocaleString() %></strong>
+            </div>
+            <div style="flex: 1; background: rgba(255,255,255,0.1); padding: 15px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.1);">
+                <p style="font-size: 10px; opacity: 0.6;">PENDING CASHOUT</p>
+                <strong style="font-size: 16px; color: #fbbf24;">UGX 0</strong>
+            </div>
+        </div>
+    </div>
+
+    <div style="padding: 25px 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h4 style="color: #64748b; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.5px;">Recent Payouts</h4>
+            <i data-lucide="filter" size="18" color="#94a3b8"></i>
+        </div>
+
+        <!-- PAYOUT LIST -->
+        <div id="payout-list">
+            <% if (jobs.length === 0) { %>
+                <div style="text-align: center; padding: 50px 0; color: #cbd5e1;">
+                    <i data-lucide="wallet" size="48" style="margin-bottom: 10px;"></i>
+                    <p>No earnings history yet.</p>
+                </div>
+            <% } %>
+
+            <% jobs.forEach((job, index) => { %>
+                <!-- <div class="earnings-card" style="animation-delay: <%= index * 0.1 %>s"> -->
+                    <div style="display: flex; align-items: center; gap: 15px;">
+                        <div style="background: #f0fdf4; color: #16a34a; width: 45px; height: 45px; border-radius: 12px; display: flex; align-items: center; justify-content: center;">
+                            <i data-lucide="arrow-up-right"></i>
+                        </div>
+                        <div>
+                            <span class="date-badge"><%= new Date(job.updated_at).toLocaleDateString('en-GB') %></span>
+                            <h4 style="margin: 2px 0; color: #1e293b;"><%= job.service_type %></h4>
+                            <p style="font-size: 11px; color: #64748b; font-weight: 600;"><%= job.model %> • ID #<%= job.id %></p>
+                        </div>
+                    </div>
+                    <div class="price-green">
+                        +<%= Number(job.total_price).toLocaleString() %>
+                    </div>
+                </div>
+            <% }) %>
+        </div>
+
+        <button class="btn-primary" style="width: 100%; margin-top: 20px; background: #064e3b; padding: 18px; border-radius: 16px; font-weight: 800; box-shadow: 0 10px 20px rgba(6, 78, 59, 0.2);">
+            Withdraw to Mobile Money <i data-lucide="external-link" size="18" style="margin-left: 8px;"></i>
+        </button>
+    </div>
+
+    <!-- MECHANIC BOTTOM NAVIGATION -->
+    <nav class="bottom-nav">
+        <a href="/mechanic/dashboard" class="nav-item">
+            <i data-lucide="layout-grid"></i>
+            <span>Jobs</span>
+        </a>
+        <a href="/mechanic/earnings" class="nav-item active" style="color: #16a34a;">
+            <i data-lucide="wallet"></i>
+            <span>Earnings</span>
+        </a>
+        <a href="/logout" class="nav-item">
+            <i data-lucide="log-out"></i>
+            <span>Logout</span>
+        </a>
+    </nav>
+
+    <script>lucide.createIcons();</script>
+</body>
+</html>

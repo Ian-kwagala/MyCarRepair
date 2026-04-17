@@ -64,6 +64,25 @@ p { font-size: 1.1rem; opacity: 0.9; margin-bottom: 30px; }
     display: flex; align-items: center; gap: 10px;
 }
 
+/* INPUT ELEGANT GROUP - SEARCH & FILTER */
+.input-elegant-group {
+    display: flex; align-items: center; gap: 10px; padding: 12px 18px;
+    border-radius: 15px; border: 1.5px solid #e2e8f0; transition: 0.3s;
+}
+.input-elegant-group input { border: none; background: transparent; outline: none; width: 100%; font-weight: 600; }
+
+/* SECTION LABEL */
+.section-label {
+    font-size: 11px; font-weight: 800; letter-spacing: 1.5px;
+    text-transform: uppercase; border-bottom: 1px solid #e2e8f0;
+    padding-bottom: 8px; margin-bottom: 15px;
+}
+
+/* STATUS BADGE */
+.status-badge {
+    padding: 4px 10px; border-radius: 8px; font-size: 10px; font-weight: 900;
+}
+
 /* STATS BAR */
 .stats { display: flex; gap: 40px; }
 .stat-item strong { display: block; font-size: 1.5rem; color: var(--action-orange); }
@@ -320,3 +339,9 @@ p { font-size: 1.1rem; opacity: 0.9; margin-bottom: 30px; }
         100% { transform: scale(1) translateY(0); opacity: 1; }
     }
 
+    /* Override back button for white backgrounds */
+    /* .btn-back-circle {
+        background: #f1f5f9 !important;
+        color: #0f172a !important;
+        border: 1px solid #e2e8f0 !important;
+    } */
