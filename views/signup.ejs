@@ -1,85 +1,103 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Create Account | MyCarRepair</title>
     <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="/css/auth.css">
     <script src="https://unpkg.com/lucide@latest"></script>
-    <link rel="stylesheet" href="/css/alerts.css">
-    <script src="/js/alerts.js"></script>
+    <!-- This line adds the icon to the browser tab -->
+<link rel="icon" type="image/png" href="/images/favicon.png">
 </head>
-<body>
+<body class="auth-page">
 
-    <div class="page-bg"></div>
-    <div class="bg-overlay"></div>
-
-    <div class="auth-page">
-        <div class="login-card">
-            <div class="login-header">
-                <div class="role-toggle">
-                    <button class="role-btn active" onclick="setRole('owner')">Car Owner</button>
-                    <button class="role-btn" onclick="setRole('mechanic')">Mechanic</button>
-                </div>
-                <h2>Create Account</h2>
-                <p>Join the trusted automotive marketplace</p>
+    <div class="auth-card">
+        <div class="auth-header">
+            <!-- Role Toggle -->
+            <div class="role-container">
+                <button class="role-tab active" id="tab-owner" onclick="setRole('owner')">
+                    <i data-lucide="user" size="18"></i> Owner
+                </button>
+                <button class="role-tab" id="tab-mechanic" onclick="setRole('mechanic')">
+                    <i data-lucide="wrench" size="18"></i> Mechanic
+                </button>
             </div>
-
-            <div class="login-body">
-                <form action="/auth/signup" method="POST">
-                    <input type="hidden" name="role" id="userRole" value="owner">
-                    
-                    <div class="form-group">
-                        <label>Full Name</label>
-                        <div class="input-wrapper">
-                            <i data-lucide="user" size="18"></i>
-                            <input type="text" name="full_name" placeholder="John Doe" required>
-                        </div>
-                    </div>
-
-                    <div class="form-group">
-                        <label>Email Address</label>
-                        <div class="input-wrapper">
-                            <i data-lucide="mail" size="18"></i>
-                            <input type="email" name="email" placeholder="john@example.com" required>
-                        </div>
-                    </div>
-
-                    <div class="form-group">
-                        <label>Phone Number</label>
-                        <div class="input-wrapper">
-                            <i data-lucide="phone" size="18"></i>
-                            <input type="text" name="phone" placeholder="+256..." required>
-                        </div>
-                    </div>
-
-                    <div class="form-group">
-                        <label>Password</label>
-                        <div class="input-wrapper">
-                            <i data-lucide="lock" size="18"></i>
-                            <input type="password" name="password" placeholder="••••••••" required>
-                        </div>
-                    </div>
-
-                    <button type="submit" class="btn-primary" style="width: 100%; justify-content: center;">
-                        Register Now
-                    </button>
-                </form>
-                <p style="text-align: center; margin-top: 20px; font-size: 14px;">
-                    Already have an account? <a href="/login" style="color: var(--action-orange); font-weight: bold; text-decoration: none;">Sign In</a>
-                </p>
-            </div>
+            
+            <h2 id="display-title" style="font-weight: 900; letter-spacing: -1px;">Create Account</h2>
+            <p id="display-desc" style="opacity: 0.8; font-size: 14px; margin-top: 5px;">Join the trusted automotive marketplace</p>
         </div>
+
+        <form action="/auth/signup" method="POST" style="padding: 30px;">
+            <input type="hidden" name="role" id="userRole" value="owner">
+
+            <span class="label-mini">Full Name</span>
+            <div class="input-row">
+                <i data-lucide="user" size="18" color="#94a3b8"></i>
+                <input type="text" name="full_name" placeholder="John Doe" required>
+            </div>
+
+            <span class="label-mini">Email Address</span>
+            <div class="input-row">
+                <i data-lucide="mail" size="18" color="#94a3b8"></i>
+                <input type="email" name="email" placeholder="you@email.com" required>
+            </div>
+
+            <span class="label-mini">Password</span>
+            <div class="input-row">
+                <i data-lucide="lock" size="18" color="#94a3b8"></i>
+                <input type="password" name="password" id="pass-field" placeholder="••••••••" required>
+                <div style="cursor:pointer;" onclick="togglePass('pass-field')">
+                    <i data-lucide="eye" size="18" color="#94a3b8" id="eye-icon"></i>
+                </div>
+            </div>
+
+            <button type="submit" class="btn-primary" style="width: 100%; padding: 18px; border-radius: 16px; font-weight: 800; font-size: 16px; margin-top: 10px;">
+                Register Now
+            </button>
+
+            <p style="text-align: center; margin-top: 25px; font-size: 14px; color: #64748b;">
+                Already have an account? <a href="/login" style="color: #F97316; font-weight: 800; text-decoration: none;">Sign In</a>
+            </p>
+        </form>
     </div>
 
     <script>
         lucide.createIcons();
+
+        // 1. DYNAMIC WORDING LOGIC
         function setRole(role) {
             document.getElementById('userRole').value = role;
-            const buttons = document.querySelectorAll('.role-btn');
-            buttons.forEach(btn => btn.classList.remove('active'));
-            role === 'owner' ? buttons[0].classList.add('active') : buttons[1].classList.add('active');
+            const title = document.getElementById('display-title');
+            const desc = document.getElementById('display-desc');
+            const tabO = document.getElementById('tab-owner');
+            const tabM = document.getElementById('tab-mechanic');
+
+            if(role === 'mechanic') {
+                title.innerText = "Partner Portal";
+                desc.innerText = "Open your digital garage and find new clients";
+                tabM.classList.add('active'); tabO.classList.remove('active');
+            } else {
+                title.innerText = "Create Account";
+                desc.innerText = "Join the trusted automotive marketplace";
+                tabO.classList.add('active'); tabM.classList.remove('active');
+            }
+        }
+
+        // 2. PASSWORD TOGGLE
+        function togglePass(id) {
+            const el = document.getElementById(id);
+            if(el.type === 'password') {
+                el.type = 'text';
+                document.getElementById('eye-icon').setAttribute('data-lucide', 'eye-off');
+            } else {
+                el.type = 'password';
+                document.getElementById('eye-icon').setAttribute('data-lucide', 'eye');
+            }
+            lucide.createIcons();
         }
     </script>
+    <!-- Include these at the bottom of your <body> -->
+<link rel="stylesheet" href="/css/alerts.css">
+<script src="/js/alerts.js"></script>
 </body>
 </html>

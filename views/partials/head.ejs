@@ -1,0 +1,22 @@
+<script src="/socket.io/socket.io.js"></script>
+<script>
+    const socket = io();
+    const globalUserId = "<%= userId %>"; // Passed from server.js
+
+    if (globalUserId) {
+        // Join private room for targeted notifications
+        socket.emit('join_room', globalUserId);
+    }
+
+    // LISTENER: Generic Notification (Works on all pages)
+    socket.on('app_notification', (data) => {
+        // Use our ProToast from before
+        ProToast.show(data.message, data.type || 'success');
+        
+        // Play a professional "Ping" sound
+        new Audio('https://assets.mixkit.co/active_storage/sfx/2357/2357-preview.mp3').play();
+        
+        // Optionally refresh specific data without reloading page
+        if(typeof refreshDashboard === 'function') refreshDashboard();
+    });
+</script>

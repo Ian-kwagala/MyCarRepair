@@ -7,7 +7,17 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="/socket.io/socket.io.js"></script> <!-- Load Socket.io -->
     <link rel="stylesheet" href="/css/alert.css">
+    <script>
+        const socket = io();
+        const globalUserId = "<%= userId %>";
+        if (globalUserId) {
+            socket.emit('join_room', globalUserId);
+            console.log('SOS User joined room:', globalUserId);
+        }
+    </script>
     <script src="/js/alert.js"></script>
+    <!-- This line adds the icon to the browser tab -->
+<link rel="icon" type="image/png" href="/images/favicon.png">
 </head>
 <body style="background: var(--emergency-red); color: white;">
         <%- include('../partials/back-nav') %>
@@ -62,6 +72,14 @@
                         <p style="font-size: 11px; font-weight: 800; color: #94a3b8; margin-bottom: 5px;">ESTIMATED ARRIVAL</p>
                         <strong style="color: #15803d;"><i data-lucide="navigation" size="14"></i> 8 - 12 Minutes</strong>
                     </div>
+
+                    <!--
+                    <div style="background: #0f172a; color: white; padding: 20px; border-radius: 20px; margin: 20px 0; text-align: center;">
+                        <p style="font-size: 11px; opacity: 0.6; letter-spacing: 2px;">YOUR START CODE</p>
+                        <h1 id="display-start-code" style="font-size: 48px; letter-spacing: 10px; color: var(--action-orange);">----</h1>
+                        <p style="font-size: 12px; margin-top: 10px;">Give this code to the mechanic upon arrival to start the repair.</p>
+                    </div>
+                    -->
 
                     <a href="#" id="mech-call-link" class="btn-call">
                         <i data-lucide="phone"></i> Call Mechanic
@@ -166,14 +184,26 @@
 
     <script>
         lucide.createIcons();
-        const socket = io();
         const messages = ["Mechanics usually arrive in 10-15 mins.", "We've notified 5 nearby garages.", "Stay safe, help is on the way."];
         let msgIndex = 0;
         let myJobId = null; // Store the job ID returned from server
 
+        async function updateOwnerLocation(lat, lng) {
+            try {
+                await fetch('/api/owner/update-location', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ lat, lng })
+                });
+            } catch (err) {
+                console.error('Failed to sync SOS location:', err);
+            }
+        }
+
         // --- UPDATED SOS TRIGGER LOGIC ---
         function sendSOS(issue) {
-            const selectedVehicle = document.getElementById('sos-vehicle-id').value;
+            const vehicleSelect = document.getElementById('sos-vehicle-id');
+            const selectedVehicle = vehicleSelect ? vehicleSelect.value : '<%= (cars && cars.length > 0) ? cars[0].id : "" %>';
             const statusMsg = document.getElementById('comfort-msg');
 
             if(!selectedVehicle) {
@@ -189,6 +219,8 @@
                     (position) => {
                         const lat = position.coords.latitude;
                         const lng = position.coords.longitude;
+
+                        updateOwnerLocation(lat, lng);
 
                         // 2. SWITCH TO WAITING UI
                         document.getElementById('selection-screen').style.display = 'none';
@@ -224,30 +256,55 @@
             location.href = '/owner/dashboard';
         }
         
-        socket.on('job_taken', (data) => {
+        function showAcceptedMechanicUI(data) {
             // CRITICAL CHECK: Does the incoming 'Accept' signal match my active SOS ID?
-            if (data.jobId == window.myJobId) {
-                console.log("Mechanic accepted my job!");
-                
-                // 1. Transform UI to Green
-                document.body.classList.add('help-arriving');
-                
-                // 2. Hide waiting spinner, update title, hide comfort text
-                document.getElementById('status-indicator').style.display = 'none';
-                document.getElementById('wait-title').innerText = "Mechanic is Coming!";
-                document.getElementById('comfort-msg').style.display = 'none';
+            if (data.jobId != window.myJobId) return;
 
-                // 3. Populate Mechanic Data
+            console.log('Mechanic accepted my job!');
+
+            // 1. Transform UI to Green
+            document.body.classList.add('help-arriving');
+
+            // 2. Hide waiting spinner, update title, hide comfort text
+            document.getElementById('status-indicator').style.display = 'none';
+            document.getElementById('wait-title').innerText = 'Mechanic is Coming!';
+            document.getElementById('comfort-msg').style.display = 'none';
+
+            // 3. Populate Mechanic Data
+            document.getElementById('mech-name').innerText = data.mechanicName || '--';
+            document.getElementById('mech-rating').innerText = data.mechanicRating ? Number(data.mechanicRating).toFixed(1) : '4.9';
+            document.getElementById('mech-jobs').innerText = data.jobsDone ? (data.jobsDone + ' Jobs Done') : 'Verified Mechanic';
+            document.getElementById('mech-call-link').href = data.mechanicPhone ? ('tel:' + data.mechanicPhone) : '#';
+            document.getElementById('accepted-ui').style.display = 'block';
+
+            lucide.createIcons();
+        }
+
+        socket.on('job_taken', (data) => {
+            showAcceptedMechanicUI(data);
+        });
+
+        /*
+        socket.on('job_accepted_with_code', (data) => {
+            if (data.jobId == window.myJobId) {
+                document.body.classList.add('help-arriving');
+                // Update Mechanic Info
                 document.getElementById('mech-name').innerText = data.mechanicName;
-                document.getElementById('mech-jobs').innerText = data.jobsDone + " Jobs Done";
-                document.getElementById('mech-call-link').href = "tel:" + data.mechanicPhone;
+                document.getElementById('mech-call-link').href = 'tel:' + data.mechanicPhone;
+
+                // SHOW THE REAL CODE
+                document.getElementById('display-start-code').innerText = data.startCode; // 4-digit code
+
                 document.getElementById('accepted-ui').style.display = 'block';
-                
                 lucide.createIcons();
             }
         });
+        */
     </script>
-
+<!-- Include these at the bottom of your <body> -->
+<link rel="stylesheet" href="/css/alerts.css">
+<script src="/js/alerts.js"></script>
+<%- include('../partials/alerts') %>
 
 </body>
 </html>

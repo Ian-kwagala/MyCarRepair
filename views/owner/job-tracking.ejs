@@ -6,6 +6,15 @@
     <link rel="stylesheet" href="/css/style.css">
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="/socket.io/socket.io.js"></script>
+    <!-- This line adds the icon to the browser tab -->
+<link rel="icon" type="image/png" href="/images/favicon.png">
+    <script>
+        const socket = io();
+        const globalUserId = "<%= userId %>";
+        if (globalUserId) {
+            socket.emit('join_room', globalUserId);
+        }
+    </script>
     <link rel="stylesheet" href="/css/alert.css">
     <style>
         .track-header { background: #0f172a; color: white; padding: 30px 20px; border-radius: 0 0 25px 25px; }
@@ -70,6 +79,16 @@
         <h2 style="margin: 15px 0 5px 0;"><%= job.service_type %></h2>
         <p style="opacity: 0.7; font-size: 13px;">Status: <strong id="live-status" style="color: var(--action-orange); text-transform: uppercase;"><%= job.status %></strong></p>
     </div>
+
+    <!--
+    <div style="background: #0f172a; color: white; padding: 20px; border-radius: 20px; margin: 15px; text-align: center; border: 2px solid var(--action-orange);">
+        <p style="font-size: 10px; opacity: 0.6; letter-spacing: 1.5px; font-weight: 800;">VERIFICATION CODE</p>
+        <h1 style="font-size: 42px; letter-spacing: 12px; color: var(--action-orange); margin: 5px 0;">
+            <%= job.start_code %>
+        </h1>
+        <p style="font-size: 11px; opacity: 0.8;">Give this to the mechanic to authorize the work.</p>
+    </div>
+    -->
 
     <div style="padding: 20px;">
         <!-- TRACKING IDS FOR REFERENCE -->
@@ -201,7 +220,6 @@
     <script src="/js/alert.js"></script>
     <script>
         lucide.createIcons();
-        const socket = io();
 
         // MEANINGFUL COMMENT: Listen for live updates from the Mechanic
         socket.on('task_update', (data) => {
@@ -213,6 +231,21 @@
                 // Note: You would typically send the taskId from the server
                 // This is a simple version that refreshes the checkmark
                 location.reload(); 
+            }
+        });
+
+        socket.on('job_progress_update', (data) => {
+            if (data.jobId == '<%= job.id %>') {
+                document.getElementById('live-status').innerText = (data.status || 'updated').toUpperCase();
+                AppAlert.show('Progress Update', data.message || 'Mechanic updated job progress.', 'info');
+            }
+        });
+
+        socket.on('checklist_activated', (data) => {
+            if (data.jobId == '<%= job.id %>') {
+                AppAlert.show('Checklist Activated', 'Mechanic approved the problem and started repair.', 'success', () => {
+                    location.reload();
+                });
             }
         });
         
@@ -249,5 +282,9 @@
             });
         }
     </script>
+    <!-- Include these at the bottom of your <body> -->
+<link rel="stylesheet" href="/css/alerts.css">
+<script src="/js/alerts.js"></script>
+<%- include('../partials/alerts') %>
 </body>
 </html>

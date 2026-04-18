@@ -6,7 +6,16 @@
     <link rel="stylesheet" href="/css/style.css">
     <link rel="stylesheet" href="/css/alerts.css">
     <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="icon" type="image/png" href="/images/favicon.png">
     <script src="/js/alerts.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        const globalUserId = "<%= userId %>";
+        if (globalUserId) {
+            socket.emit('join_room', globalUserId);
+        }
+    </script>
     <style>
         .profile-header { background: #0f172a; padding: 50px 25px 90px 25px; color: white; border-radius: 0 0 40px 40px; }
         .overlap-card { background: white; border-radius: 30px; margin-top: -60px; padding: 30px 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.1); margin-bottom: 30px; }
@@ -30,7 +39,9 @@
             display: flex; justify-content: space-between; align-items: center;
         }
     </style>
+
 </head>
+
 <body>
     <div class="profile-header animate-header">
         <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -83,7 +94,7 @@
         <!-- REVIEWS SECTION -->
         <h4 style="color: #1e293b; font-weight: 800; margin: 30px 0 15px 10px;">Reputation History</h4>
         <% reviews.forEach((r, index) => { %>
-            <div class="review-card animate-item" style="animation-delay: <%= index * 0.1 %>s">
+            <div class="review-card animate-item" style="animation-delay:<%= index * 0.1 %>s;">
                 <div style="display: flex; justify-content: space-between;">
                     <strong style="color: #0f172a;"><%= r.owner_name %></strong>
                     <div style="color: #fbbf24; font-weight: 800;"><%= r.rating %> ★</div>
@@ -120,5 +131,9 @@
             }
         }
     </script>
+    <!-- Include these at the bottom of your <body> -->
+<link rel="stylesheet" href="/css/alerts.css">
+<script src="/js/alerts.js"></script>
+<%- include('../partials/alerts') %>
 </body>
 </html>

@@ -5,82 +5,303 @@
     <title>Register Vehicle | MyCarRepair</title>
     <link rel="stylesheet" href="/css/style.css">
     <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="icon" type="image/png" href="/images/favicon.png">
     <link rel="stylesheet" href="/css/alerts.css">
-<script src="/js/alerts.js"></script>
+    <script src="/js/alerts.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+
+    <script>
+        const socket = io();
+        const globalUserId = "<%= userId %>";
+        if (globalUserId) {
+            socket.emit('join_room', globalUserId);
+        }
+    </script>
+    
     <style>
-        .form-container { background: white; border-radius: 30px; margin-top: -30px; padding: 30px 20px; box-shadow: 0 -10px 40px rgba(0,0,0,0.1); }
-        .section-title { font-size: 11px; font-weight: 800; color: #94a3b8; letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 12px; display: block; }
-        .input-box { background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 14px; padding: 12px 15px; margin-bottom: 15px; display: flex; align-items: center; gap: 10px; transition: 0.3s; }
-        .input-box:focus-within { border-color: var(--action-orange); background: white; }
-        .input-box input, .input-box select { border: none; background: transparent; width: 100%; outline: none; font-size: 15px; font-weight: 600; color: #1e293b; }
-        #preview-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 15px; }
-        .preview-img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 12px; animation: popScale 0.3s ease-out; }
+        body {
+            background:
+                radial-gradient(900px 450px at 50% -120px, rgba(249, 115, 22, 0.35), rgba(249, 115, 22, 0) 62%),
+                linear-gradient(180deg, #0f172a 0%, #1e293b 38%, #f8fafc 38%, #f8fafc 100%);
+            min-height: 100vh;
+        }
+
+        .page-hero {
+            position: relative;
+            padding: 56px 20px 72px 20px;
+            text-align: center;
+            color: #ffffff;
+            overflow: hidden;
+            animation: riseFade 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+        }
+
+        .page-hero::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(110deg, transparent 40%, rgba(255,255,255,0.08) 50%, transparent 60%);
+            transform: translateX(-120%);
+            animation: heroShine 4s ease-in-out infinite;
+            pointer-events: none;
+        }
+
+        .hero-title {
+            font-size: 32px;
+            font-weight: 900;
+            letter-spacing: -0.4px;
+            margin: 0;
+            text-shadow: 0 8px 24px rgba(2, 6, 23, 0.35);
+        }
+
+        .hero-subtitle {
+            opacity: 0.8;
+            font-size: 14px;
+            margin-top: 8px;
+        }
+
+        .form-container {
+            background: rgba(255, 255, 255, 0.96);
+            border-radius: 30px;
+            margin-top: -34px;
+            padding: 26px 20px 30px 20px;
+            border: 1px solid rgba(255, 255, 255, 0.8);
+            box-shadow: 0 -8px 28px rgba(15, 23, 42, 0.08), 0 22px 44px rgba(15, 23, 42, 0.09);
+            backdrop-filter: blur(6px);
+        }
+
+        .form-section {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 20px;
+            padding: 16px 14px;
+            margin-bottom: 14px;
+            box-shadow: 0 8px 18px rgba(15, 23, 42, 0.04);
+            animation: riseFade 0.55s cubic-bezier(0.16, 1, 0.3, 1) both;
+        }
+
+        .delay-1 { animation-delay: 0.05s; }
+        .delay-2 { animation-delay: 0.12s; }
+        .delay-3 { animation-delay: 0.2s; }
+        .delay-4 { animation-delay: 0.28s; }
+
+        .section-title {
+            font-size: 11px;
+            font-weight: 900;
+            color: #64748b;
+            letter-spacing: 1.6px;
+            text-transform: uppercase;
+            margin-bottom: 12px;
+            display: block;
+        }
+
+        .grid-two {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .input-box {
+            background: #f8fafc;
+            border: 1.5px solid #e2e8f0;
+            border-radius: 14px;
+            padding: 12px 14px;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: transform 0.22s ease, border-color 0.22s ease, box-shadow 0.22s ease, background 0.22s ease;
+        }
+
+        .input-box:hover {
+            transform: translateY(-1px);
+            border-color: #cbd5e1;
+        }
+
+        .input-box:focus-within {
+            border-color: var(--action-orange);
+            background: #ffffff;
+            box-shadow: 0 0 0 4px rgba(249, 115, 22, 0.12);
+        }
+
+        .input-box input,
+        .input-box select {
+            border: none;
+            background: transparent;
+            width: 100%;
+            outline: none;
+            font-size: 15px;
+            font-weight: 600;
+            color: #0f172a;
+        }
+
+        .input-box input::placeholder {
+            color: #64748b;
+            font-weight: 600;
+        }
+
+        .photo-upload-zone {
+            border: 2px dashed #cbd5e1;
+            border-radius: 18px;
+            text-align: center;
+            cursor: pointer;
+            background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
+            padding: 24px 14px;
+            transition: border-color 0.22s ease, transform 0.22s ease, box-shadow 0.22s ease;
+        }
+
+        .photo-upload-zone:hover {
+            border-color: var(--action-orange);
+            transform: translateY(-1px);
+            box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+        }
+
+        #preview-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-top: 16px;
+        }
+
+        .preview-img {
+            width: 100%;
+            aspect-ratio: 1;
+            object-fit: cover;
+            border-radius: 12px;
+            border: 1px solid #e2e8f0;
+            animation: zoomIn 0.28s ease-out;
+        }
+
+        .submit-btn {
+            width: 100%;
+            margin-top: 16px;
+            padding: 18px;
+            border-radius: 16px;
+            font-weight: 900;
+            letter-spacing: 0.3px;
+            background: linear-gradient(90deg, #f97316 0%, #fb923c 100%);
+            box-shadow: 0 12px 26px rgba(249, 115, 22, 0.32);
+            transition: transform 0.22s ease, box-shadow 0.22s ease;
+            animation: riseFade 0.55s cubic-bezier(0.16, 1, 0.3, 1) both;
+            animation-delay: 0.35s;
+        }
+
+        .submit-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 14px 30px rgba(249, 115, 22, 0.38);
+        }
+
+        .helper-text {
+            font-size: 11px;
+            color: #64748b;
+            margin-top: 8px;
+        }
+
+        @keyframes riseFade {
+            from {
+                opacity: 0;
+                transform: translateY(12px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes zoomIn {
+            from { opacity: 0; transform: scale(0.92); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        @keyframes heroShine {
+            0%, 100% { transform: translateX(-120%); }
+            45%, 60% { transform: translateX(120%); }
+        }
+
+        @media (max-width: 560px) {
+            .grid-two {
+                grid-template-columns: 1fr;
+                gap: 0;
+            }
+
+            .hero-title {
+                font-size: 28px;
+            }
+        }
     </style>
 </head>
 <body>
     <%- include('../partials/back-nav') %>
 
-    <div style="padding: 50px 20px 60px 20px; text-align: center; color: white;">
-        <h2 style="font-size: 28px; font-weight: 900;">Register Vehicle</h2>
-        <p style="opacity: 0.6; font-size: 14px;">Essential for emergency & maintenance accuracy</p>
+    <div class="page-hero">
+        <h2 class="hero-title">Register Vehicle</h2>
+        <p class="hero-subtitle">Essential for emergency and maintenance accuracy</p>
     </div>
 
     <div class="form-container">
         <form action="/owner/add-car" method="POST" enctype="multipart/form-data">
-            
-            <span class="section-title">Identity</span>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-                <div class="input-box"><input type="text" name="make" placeholder="Make (Toyota)" required></div>
-                <div class="input-box"><input type="text" name="model" placeholder="Model (Wish)" required></div>
-            </div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-                <div class="input-box"><input type="text" name="plate" placeholder="Plate No." required></div>
-                <div class="input-box"><input type="number" name="year" placeholder="Year" value="2025" required></div>
-            </div>
 
-            <span class="section-title" style="margin-top: 15px;">Technical Specs</span>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-                <div class="input-box">
-                    <select name="fuel_type" required>
-                        <option value="" disabled selected>Fuel Type</option>
-                        <option value="Petrol">Petrol</option>
-                        <option value="Diesel">Diesel</option>
-                        <option value="Hybrid">Hybrid</option>
-                        <option value="Electric">Electric</option>
-                    </select>
+            <div class="form-section delay-1">
+                <span class="section-title">Identity</span>
+                <div class="grid-two">
+                    <div class="input-box"><input type="text" name="make" placeholder="Make (Toyota)" required></div>
+                    <div class="input-box"><input type="text" name="model" placeholder="Model (Wish)" required></div>
                 </div>
-                <div class="input-box"><input type="text" name="tyre_size" placeholder="Tyre Size (e.g. 195/65R15)"></div>
-            </div>
-
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-                <div class="input-box">
-                    <select name="transmission">
-                        <option value="Automatic">Automatic</option>
-                        <option value="Manual">Manual</option>
-                    </select>
+                <div class="grid-two">
+                    <div class="input-box"><input type="text" name="plate" placeholder="Plate No." required></div>
+                    <div class="input-box"><input type="number" name="year" placeholder="Year" value="2025" required></div>
                 </div>
-                <div class="input-box"><input type="text" name="color" placeholder="Color"></div>
             </div>
 
-            <span class="section-title" style="margin-top: 15px;">Status</span>
-            <div class="input-box">
-                <i data-lucide="gauge" size="18" color="#94a3b8"></i>
-                <input type="number" name="mileage" placeholder="Current Mileage (Km)">
-            </div>
-            <div class="input-box">
-                <i data-lucide="calendar" size="18" color="#94a3b8"></i>
-                <input type="text" name="last_service" onfocus="(this.type='date')" placeholder="Last Service Date">
+            <div class="form-section delay-2">
+                <span class="section-title">Technical Specs</span>
+                <div class="grid-two">
+                    <div class="input-box">
+                        <select name="fuel_type" required>
+                            <option value="" disabled selected>Fuel Type</option>
+                            <option value="Petrol">Petrol</option>
+                            <option value="Diesel">Diesel</option>
+                            <option value="Hybrid">Hybrid</option>
+                            <option value="Electric">Electric</option>
+                        </select>
+                    </div>
+                    <div class="input-box"><input type="text" name="tyre_size" placeholder="Tyre Size (e.g. 195/65R15)"></div>
+                </div>
+
+                <div class="grid-two">
+                    <div class="input-box">
+                        <select name="transmission">
+                            <option value="Automatic">Automatic</option>
+                            <option value="Manual">Manual</option>
+                        </select>
+                    </div>
+                    <div class="input-box"><input type="text" name="color" placeholder="Color"></div>
+                </div>
             </div>
 
-            <span class="section-title" style="margin-top: 15px;">Visuals</span>
-            <label class="photo-upload-zone" style="border: 2px dashed #cbd5e1; padding: 20px; display: block; border-radius: 20px; text-align: center; cursor: pointer;">
-                <i data-lucide="camera" size="32" color="#94a3b8"></i>
-                <p style="font-size: 12px; color: #94a3b8;">Tap to upload car photos</p>
-                <input type="file" name="car_photos" id="car_photos" multiple accept="image/*" style="display: none;">
-                <div id="preview-grid"></div>
-            </label>
+            <div class="form-section delay-3">
+                <span class="section-title">Status</span>
+                <div class="input-box">
+                    <i data-lucide="gauge" size="18" color="#94a3b8"></i>
+                    <input type="number" name="mileage" placeholder="Current Mileage (Km)">
+                </div>
+                <div class="input-box">
+                    <i data-lucide="calendar" size="18" color="#94a3b8"></i>
+                    <input type="text" name="last_service" onfocus="(this.type='date')" placeholder="Last Service Date">
+                </div>
+            </div>
 
-            <button type="submit" class="btn-primary" style="width: 100%; margin-top: 30px; padding: 20px; border-radius: 18px; font-weight: 800;">
+            <div class="form-section delay-4">
+                <span class="section-title">Visuals</span>
+                <label class="photo-upload-zone">
+                    <i data-lucide="camera" size="32" color="#94a3b8"></i>
+                    <p style="font-size: 12px; color: #64748b; font-weight: 700; margin-top: 8px;">Tap to upload car photos</p>
+                    <p class="helper-text">Upload multiple clear angles for faster mechanic diagnostics.</p>
+                    <input type="file" name="car_photos" id="car_photos" multiple accept="image/*" style="display: none;">
+                    <div id="preview-grid"></div>
+                </label>
+            </div>
+
+            <button type="submit" class="btn-primary submit-btn">
                 Complete Registration
             </button>
         </form>
@@ -103,5 +324,9 @@
             });
         };
     </script>
+    <!-- Include these at the bottom of your <body> -->
+<link rel="stylesheet" href="/css/alerts.css">
+<script src="/js/alerts.js"></script>
+<%- include('../partials/alerts') %>
 </body>
 </html>

@@ -1,87 +1,106 @@
-/* BACKGROUND - Opaque overlay over original landing image */
-.auth-wrapper {
+/* BACKGROUND SYSTEM */
+.auth-page {
     min-height: 100vh;
     display: flex;
     align-items: center;
     justify-content: center;
-    background: linear-gradient(rgba(15, 23, 42, 0.7), rgba(15, 23, 42, 0.7)), 
+    /* Uses the landing page image with a heavy dark overlay for clarity */
+    background: linear-gradient(rgba(15, 23, 42, 0.85), rgba(15, 23, 42, 0.85)), 
                 url('https://images.unsplash.com/photo-1507702553912-a15641ec5821?q=80&w=2000&auto=format&fit=crop');
     background-size: cover;
     background-position: center;
     padding: 20px;
 }
 
-/* THE ORIGINAL CARD DESIGN */
+/* THE PREMIUM CARD */
 .auth-card {
     background: #ffffff;
     width: 100%;
-    max-width: 400px;
-    border-radius: 16px;
+    max-width: 420px;
+    border-radius: 28px;
     overflow: hidden;
-    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3);
-    animation: authEntrance 0.5s ease-out;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    animation: slideUpFade 0.7s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* ORIGINAL BLUE HEADER */
+@keyframes slideUpFade {
+    from { opacity: 0; transform: translateY(40px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* HEADER STYLING */
 .auth-header {
-    background: #1e3a8a; /* Original Deep Blue */
-    padding: 30px;
+    background: #1e3a8a; /* Your Original Blue */
+    padding: 35px 30px;
     color: white;
+    text-align: center;
 }
 
-/* INPUT TINT - Matching your screenshot */
-.original-input-box {
-    background: #eff6ff; /* Light blue tint from your screenshot */
-    border: 1px solid #dbeafe;
-    border-radius: 10px;
-    padding: 12px 15px;
+/* ROLE SELECTOR */
+.role-container {
+    background: rgba(0, 0, 0, 0.2);
+    display: flex;
+    padding: 6px;
+    border-radius: 16px;
+    margin-bottom: 25px;
+}
+
+.role-tab {
+    flex: 1;
+    border: none;
+    background: transparent;
+    color: white;
+    padding: 12px;
+    border-radius: 12px;
+    font-weight: 800;
+    cursor: pointer;
+    transition: all 0.4s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.role-tab.active {
+    background: #F97316; /* Your Original Orange */
+    box-shadow: 0 4px 15px rgba(249, 115, 22, 0.3);
+}
+
+/* INPUT DESIGN */
+.input-row {
+    background: #eff6ff; /* Original Light Blue Tint */
+    border: 1.5px solid #dbeafe;
+    border-radius: 14px;
+    padding: 14px 18px;
     display: flex;
     align-items: center;
     gap: 12px;
     margin-bottom: 15px;
-}
-
-.original-input-box input {
-    border: none;
-    background: transparent;
-    width: 100%;
-    outline: none;
-    color: #1e293b;
-    font-weight: 500;
-}
-
-/* THE TOGGLE - Keeping logic but original colors */
-.role-tabs {
-    display: flex;
-    background: rgba(0,0,0,0.15);
-    padding: 4px;
-    border-radius: 10px;
-    margin-bottom: 20px;
-}
-
-.tab-btn {
-    flex: 1;
-    border: none;
-    padding: 10px;
-    border-radius: 8px;
-    color: white;
-    background: transparent;
-    cursor: pointer;
-    font-weight: 700;
     transition: 0.3s;
 }
 
-.tab-btn.active {
-    background: #F97316; /* Original Orange */
+.input-row:focus-within {
+    border-color: #3b82f6;
+    background: white;
+    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
 }
 
-/* PASSWORD EYE ICON */
-.eye-icon {
-    cursor: pointer;
+.input-row input {
+    flex: 1;
+    border: none;
+    background: transparent;
+    outline: none;
+    font-size: 16px;
+    color: #1e293b;
+    font-weight: 600;
+}
+
+.label-mini {
+    font-size: 11px;
+    font-weight: 800;
     color: #94a3b8;
-}
-
-@keyframes authEntrance {
-    from { opacity: 0; transform: translateY(20px); }
-    to { opacity: 1; transform: translateY(0); }
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+    display: block;
 }

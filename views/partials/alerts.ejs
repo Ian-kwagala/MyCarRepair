@@ -1,0 +1,16 @@
+<!-- GLOBAL ERROR LISTENER -->
+<% if (typeof error !== 'undefined' && error) { %>
+    <script>
+        window.onload = () => {
+            AppAlert.show("System Error", "<%= error %>", "error");
+        }
+    </script>
+<% } %>
+
+<% if (typeof success !== 'undefined' && success) { %>
+    <script>
+        window.onload = () => {
+            AppAlert.show("Success", "<%= success %>", "success");
+        }
+    </script>
+<% } %>

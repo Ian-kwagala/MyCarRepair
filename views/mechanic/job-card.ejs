@@ -6,6 +6,15 @@
     <link rel="stylesheet" href="/css/style.css">
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="/socket.io/socket.io.js"></script>
+    <!-- This line adds the icon to the browser tab -->
+    <script>
+        const socket = io();
+        const globalUserId = "<%= mechanicId %>";
+        if (globalUserId) {
+            socket.emit('join_room', globalUserId);
+        }
+    </script>
+<link rel="icon" type="image/png" href="/images/favicon.png">
     <link rel="stylesheet" href="/css/alerts.css">
 <script src="/js/alerts.js"></script>
     <style>
@@ -64,7 +73,24 @@
     </div>
 
     <div style="padding: 20px;">
+        <!--
+        <% if (job.status === 'accepted') { %>
+            <div id="verification-gate" style="padding: 40px 20px; text-align: center;">
+                <i data-lucide="shield-lock" size="48" color="var(--action-orange)"></i>
+                <h3>Verify Arrival</h3>
+                <p>Ask the owner for the 4-digit Start Code</p>
+
+                <input type="number" id="start-code-input" placeholder="0000"
+                    style="font-size: 32px; width: 150px; text-align: center; margin: 20px 0; border: 2px solid #e2e8f0; border-radius: 12px; padding: 10px;">
+
+                <button onclick="verifyArrival()" class="btn-primary" style="width: 100%;">Unlock Job Card</button>
+            </div>
+        <% } %>
+        -->
+
+        <div id="job-card-main">
         <!-- REAL-TIME PROGRESS BAR -->
+        <% if (job.status === 'fixing' || job.status === 'completed') { %>
         <div class="progress-banner">
             <span style="font-weight: 700; color: #1e293b;">Overall Progress</span>
             <span class="fraction"><span id="completed-count">0</span>/<span id="total-count">10</span></span>
@@ -78,6 +104,19 @@
         <div id="checklist-items">
             <!-- Loaded via JavaScript -->
         </div>
+        <% } else { %>
+        <div style="background:#f8fafc; border:1.5px solid #e2e8f0; border-radius:14px; padding:16px; margin-bottom:18px;">
+            <p style="margin:0; color:#334155; font-size:13px; font-weight:700;">
+                <% if (job.status === 'accepted') { %>
+                    Step 1 of 3: Drive to the customer's car, then tap <strong>I've Reached the Car</strong>.
+                <% } else if (job.status === 'diagnosing') { %>
+                    Step 2 of 3: Confirm inspection and tap <strong>Problem Approved</strong> to activate the checklist.
+                <% } else { %>
+                    Checklist will activate once the job reaches active repair stage.
+                <% } %>
+            </p>
+        </div>
+        <% } %>
 
         <!-- PARTS STATUS SECTION -->
         <h4 class="section-label">PART APPROVAL STATUS</h4>
@@ -117,11 +156,20 @@
                 </div>
             </div>
         <% } %>
+        </div>
     </div>
 
     <!-- BOTTOM ACTIONS -->
     <div class="sticky-actions">
-        <% if (job.status !== 'completed') { %>
+        <% if (job.status === 'accepted') { %>
+            <button onclick="markReachedCar()" class="btn-primary" style="width: 100%; border-radius: 14px;">
+                I've Reached The Car
+            </button>
+        <% } else if (job.status === 'diagnosing') { %>
+            <button onclick="approveProblemAndStart()" class="btn-primary" style="width: 100%; border-radius: 14px; background: #0f172a;">
+                Problem Approved - Activate Checklist
+            </button>
+        <% } else if (job.status !== 'completed') { %>
             <!-- 1. Ability to quote multiple parts -->
             <button onclick="location.href='/mechanic/job/<%= job.id %>/quote'" class="btn-outline" style="flex: 1; border-color: #cbd5e1;">
                 <i data-lucide="plus-circle"></i> Quote Part
@@ -143,9 +191,26 @@
 
     <script>
         lucide.createIcons();
-        const socket = io();
         let total = 0;
         let completed = 0;
+
+        /*
+        async function verifyArrival() {
+            const code = document.getElementById('start-code-input').value;
+            const res = await fetch('/api/mechanic/verify-start-code', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ jobId: '<%= job.id %>', codeInput: code })
+            });
+            const data = await res.json();
+
+            if (data.success) {
+                AppAlert.show('Verified!', 'Repair session started.', 'success', () => location.reload());
+            } else {
+                AppAlert.show('Error', data.message, 'error');
+            }
+        }
+        */
 
         // Real-time update: If owner approves while mechanic is looking at the screen
         socket.on('part_approved_live', (data) => {
@@ -156,6 +221,34 @@
                 });
             }
         });
+
+        async function markReachedCar() {
+            const res = await fetch('/api/mechanic/reached-car', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ jobId: '<%= job.id %>' })
+            });
+            const data = await res.json();
+            if (data.success) {
+                AppAlert.show('Arrival Recorded', 'Owner has been notified. Inspect and approve the problem next.', 'success', () => location.reload());
+            } else {
+                AppAlert.show('Error', data.message || 'Unable to update arrival status.', 'error');
+            }
+        }
+
+        async function approveProblemAndStart() {
+            const res = await fetch('/api/mechanic/verify-problem', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ jobId: '<%= job.id %>' })
+            });
+
+            if (res.ok) {
+                AppAlert.show('Repair Started', 'Checklist is now active and owner has been notified.', 'success', () => location.reload());
+            } else {
+                AppAlert.show('Error', 'Failed to start repair stage.', 'error');
+            }
+        }
 
         async function loadChecklist() {
             try {
@@ -231,5 +324,9 @@
 
         window.onload = loadChecklist;
     </script>
+    <!-- Include these at the bottom of your <body> -->
+<link rel="stylesheet" href="/css/alerts.css">
+<script src="/js/alerts.js"></script>
+<%- include('../partials/alerts') %>
 </body>
 </html>

@@ -7,7 +7,17 @@
     <link rel="stylesheet" href="/css/style.css">
     <script src="https://unpkg.com/lucide@latest"></script>
     <link rel="stylesheet" href="/css/alerts.css">
+    <!-- This line adds the icon to the browser tab -->
+<link rel="icon" type="image/png" href="/images/favicon.png">
 <script src="/js/alerts.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        const globalUserId = "<%= userId %>";
+        if (globalUserId) {
+            socket.emit('join_room', globalUserId);
+        }
+    </script>
     <style>
         .review-card {
             background: white;
@@ -37,6 +47,7 @@
         }
     </style>
 </head>
+
 <body>
     <%- include('../partials/back-nav') %>
 
@@ -81,8 +92,12 @@
                 <div class="info-icon"><i data-lucide="wrench"></i></div>
                 <div>
                     <p style="font-size: 11px; color: #94a3b8; font-weight: 700;">SELECTED MECHANIC</p>
-                    <strong><%= mechanic.full_name %></strong>
-                    <p style="font-size: 12px; color: #64748b;">Kampala Garage • 4.9 ★</p>
+                    <% if (mechanic) { %>
+                        <strong><%= mechanic.full_name %></strong>
+                        <p style="font-size: 12px; color: #64748b;">Kampala Garage • 4.9 ★</p>
+                    <% } else { %>
+                        <strong style="color: red;">Mechanic not found</strong>
+                    <% } %>
                 </div>
             </div>
         </div>
@@ -90,8 +105,8 @@
         <!-- FINAL FORM TO SAVE TO DB -->
         <form action="/owner/finalize-booking" method="POST">
             <!-- Hidden inputs to carry data one last time -->
-            <input type="hidden" name="vehicle_id" value="<%= vehicle.id %>">
-            <input type="hidden" name="mechanic_id" value="<%= mechanic.id %>">
+            <input type="hidden" name="vehicle_id" value="<%= vehicle ? vehicle.id : '' %>">
+            <input type="hidden" name="mechanic_id" value="<%= mechanic ? mechanic.id : '' %>">
             <input type="hidden" name="service_type" value="<%= service_type %>">
             <input type="hidden" name="scheduled_date" value="<%= scheduled_date %>">
 
@@ -106,5 +121,9 @@
     </div>
 
     <script>lucide.createIcons();</script>
+    <!-- Include these at the bottom of your <body> -->
+<link rel="stylesheet" href="/css/alerts.css">
+<script src="/js/alerts.js"></script>
+<%- include('../partials/alerts') %>
 </body>
 </html>

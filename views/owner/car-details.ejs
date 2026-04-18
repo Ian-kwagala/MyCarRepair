@@ -4,9 +4,19 @@
     <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><%= car.plate_number %> | MyCarRepair</title>
     <link rel="stylesheet" href="/css/style.css">
+    <!-- This line adds the icon to the browser tab -->
+<link rel="icon" type="image/png" href="/images/favicon.png">
     <script src="https://unpkg.com/lucide@latest"></script>
     <link rel="stylesheet" href="/css/alerts.css">
 <script src="/js/alerts.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        const globalUserId = "<%= userId %>";
+        if (globalUserId) {
+            socket.emit('join_room', globalUserId);
+        }
+    </script>
     <style>
         .details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 20px; }
         .spec-card {
@@ -101,5 +111,9 @@
     </div>
 
     <script>lucide.createIcons();</script>
+    <!-- Include these at the bottom of your <body> -->
+<link rel="stylesheet" href="/css/alerts.css">
+<script src="/js/alerts.js"></script>
+<%- include('../partials/alerts') %>
 </body>
 </html>

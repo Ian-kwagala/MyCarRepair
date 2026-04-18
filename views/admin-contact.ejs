@@ -2,6 +2,8 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8"><link rel="stylesheet" href="/css/style.css"><link rel="stylesheet" href="/css/auth.css">
+    <!-- This line adds the icon to the browser tab -->
+<link rel="icon" type="image/png" href="/images/favicon.png">
 </head>
 <body class="auth-wrapper">
     <div class="auth-card animate-pop-in" style="padding: 40px; text-align: center;">
@@ -18,5 +20,9 @@
         <button onclick="history.back()" class="btn-primary" style="width: 100%;">Back to Login</button>
     </div>
     <script src="https://unpkg.com/lucide@latest"></script><script>lucide.createIcons();</script>
+    <!-- Include these at the bottom of your <body> -->
+<link rel="stylesheet" href="/css/alerts.css">
+<script src="/js/alerts.js"></script>
+<%- include('../partials/alerts') %>
 </body>
 </html>

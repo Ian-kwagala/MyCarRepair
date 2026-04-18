@@ -5,10 +5,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Mechanic Portal | MyCarRepair</title>
     <link rel="stylesheet" href="/css/style.css">
+    <link rel="icon" type="image/png" href="/images/favicon.png">
     <link rel="stylesheet" href="/css/alert.css">
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="/socket.io/socket.io.js"></script>
     <script src="/js/alert.js"></script>
+    <script>
+        const socket = io();
+        const globalUserId = "<%= userId %>";
+        if (globalUserId) {
+            socket.emit('join_room', globalUserId);
+            console.log('Mechanic joined room:', globalUserId);
+        }
+    </script>
     <style>
         /* MECHANIC-SPECIFIC STYLING */
         @keyframes slideInRight {
@@ -179,6 +188,19 @@
         </div>
     </div>
 
+    <!-- GLOBAL SOS ALERT MODAL -->
+    <div id="global-sos-modal" class="alert-overlay" style="display: none;">
+        <div class="alert-card animate-pop-in">
+            <div style="color: var(--emergency-red);"><i data-lucide="bell-ring" class="animate-bounce"></i></div>
+            <h2 style="margin: 15px 0;">New SOS Request!</h2>
+            <p id="sos-pop-details"></p>
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button onclick="ignoreSOS()" class="btn-outline" style="flex:1;">Decline</button>
+                <button id="sos-pop-accept-btn" class="btn-primary" style="flex:2; background: var(--emergency-red);">Accept Now</button>
+            </div>
+        </div>
+    </div>
+
     <style>
         .star-rating { color: #cbd5e1; cursor: pointer; transition: 0.2s; }
         .star-rating.active { color: #fbbf24; fill: #fbbf24; transform: scale(1.2); }
@@ -186,7 +208,6 @@
 
     <script>
         lucide.createIcons();
-        const socket = io();
 
         // 1. ONLINE/OFFLINE TOGGLE (Updated with API call)
         let isOnline = true;
@@ -262,7 +283,7 @@
         }
 
         // RENDER JOB CARD - Extracted for reusability
-        function renderJobCard(job) {
+        function renderJobCard(job, containerId) {
             const card = document.createElement('div');
             const accentColor = job.sos_active ? "#ef4444" : "#3b82f6"; // Red for SOS, Blue for Booking
             
@@ -301,9 +322,21 @@
                 </div>
             `;
 
-            // Use the lat/lng sent directly from the owner's browser
-            const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${job.location_lat},${job.location_lng}`;
-            card.querySelector('.btn-navigate').href = mapsUrl;
+            // Navigate using the latest known owner coordinates.
+            const hasCoords = job.location_lat !== null && job.location_lng !== null &&
+                job.location_lat !== undefined && job.location_lng !== undefined;
+            const navigateBtn = card.querySelector('.btn-navigate');
+
+            if (hasCoords) {
+                const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${job.location_lat},${job.location_lng}`;
+                navigateBtn.href = mapsUrl;
+            } else {
+                navigateBtn.href = '#';
+                navigateBtn.onclick = function (e) {
+                    e.preventDefault();
+                    AppAlert.show('Location Pending', 'Owner location is not available yet. Ask owner to open dashboard or SOS with GPS enabled.', 'warning');
+                };
+            }
 
             // Ensure SOS jobs are explicitly accepted, not automatic
             const primaryBtn = card.querySelector('.btn-primary');
@@ -316,6 +349,11 @@
                 primaryBtn.onclick = function () {
                     location.href = '/mechanic/job/' + job.id;
                 };
+            }
+
+            if (containerId) {
+                const targetContainer = document.getElementById(containerId);
+                if (targetContainer) targetContainer.prepend(card);
             }
 
             return card;
@@ -429,11 +467,22 @@
 
         // Listen for real-time job updates
         socket.on('new_job_pushed', (job) => {
-            if (isOnline) {
-                refreshDashboard(); // always refresh when a new job is pushed
-                new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3').play();
-            }
+            if (!isOnline) return;
+
+            // Show Modal immediately
+            document.getElementById('sos-pop-details').innerText = `${job.owner_name} needs help with ${job.service_type}`;
+            document.getElementById('sos-pop-accept-btn').onclick = () => acceptJob(job.id, job.owner_id);
+            document.getElementById('global-sos-modal').style.display = 'flex';
+
+            // Add to list in background
+            renderJobCard(job, 'dynamic-sos-container');
+            refreshDashboard();
+            new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3').play();
         });
+
+        function ignoreSOS() {
+            document.getElementById('global-sos-modal').style.display = 'none';
+        }
 
         // 3. Load all jobs on page load
         window.onload = async () => {
@@ -455,8 +504,13 @@
             }
         }
 
-        function acceptJob(jobId) {
-            socket.emit('accept_job', { jobId });
+        function acceptJob(jobId, ownerId) {
+            if (!confirm('Accept this job and begin the trip to the customer?')) {
+                return;
+            }
+
+            socket.emit('accept_job', { jobId, ownerId });
+            document.getElementById('global-sos-modal').style.display = 'none';
             
             AppAlert.show(
                 "Job Accepted!", 
@@ -465,6 +519,10 @@
             );
             refreshDashboard();
         }
+
+        socket.on('acceptance_success', (data) => {
+            AppAlert.show('Accepted', 'Owner has been notified. Proceed to the car, then mark arrival on the job card.', 'success');
+        });
 
         // Respond to Appointment (Accept/Decline)
         async function respondApp(jobId, decision) {
@@ -512,5 +570,10 @@
             }
         }
     </script>
+<!-- Include these at the bottom of your <body> -->
+<link rel="stylesheet" href="/css/alerts.css">
+<script src="/js/alerts.js"></script>
+<%- include('../partials/alerts') %>
+
 </body>
 </html>

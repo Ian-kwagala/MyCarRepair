@@ -28,6 +28,12 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
+// Attach io to every request so routes can emit real-time events.
+app.use((req, res, next) => {
+    req.io = io;
+    next();
+});
+
 // --- SESSION SETUP ---
 // 1. Define the session middleware separately so we can share it
 const sessionMiddleware = session({
@@ -76,6 +82,9 @@ async function broadcastJob(jobId) {
     // Only broadcast to online mechanics in the 'online_mechanics' room
     io.to('online_mechanics').emit('new_job_pushed', result.rows[0]);
 }
+
+// HELPER: Generate a 4-digit verification code
+// const generateCode = () => Math.floor(1000 + Math.random() * 9000).toString();
 
 // HELPER: Group jobs by human-friendly dates
 function groupJobsByDate(jobs) {
@@ -194,7 +203,9 @@ const isAuthenticated = (req, res, next) => {
 
 // Route to show Add Car page
 app.get('/owner/add-car', isAuthenticated, (req, res) => {
-    res.render('owner/add-car');
+    res.render('owner/add-car', {
+        userId: req.session.userId
+    });
 });
 
 // POST: Add Car with Professional Fix
@@ -253,7 +264,8 @@ app.get('/owner/car/:id', isAuthenticated, async (req, res) => {
         // Pass userName from session to template
         res.render('owner/car-details', {
             car: carResult.rows[0],
-            userName: req.session.userName
+            userName: req.session.userName,
+            userId: req.session.userId
         });
     } catch (err) {
         console.error(err);
@@ -278,7 +290,8 @@ app.get('/owner/profile', isAuthenticated, async (req, res) => {
             stats: {
                 cars: carCount.rows[0].count,
                 jobs: jobCount.rows[0].count
-            }
+            },
+            userId: req.session.userId
         });
     } catch (err) {
         console.error(err);
@@ -311,6 +324,7 @@ app.get('/owner/activity', isAuthenticated, async (req, res) => {
             pendingJobs, 
             historyJobs, 
             userName: req.session.userName,
+            userId: req.session.userId,
             currentPage: 'activity'
         });
     } catch (err) { console.error(err); res.status(500).send("Error"); }
@@ -323,14 +337,21 @@ app.get('/owner/track-job/:id', isAuthenticated, async (req, res) => {
         // 1. Fetch Job, Mechanic, and Car Info
         const jobQuery = `
             SELECT j.*, u.full_name as mechanic_name, u.phone as mechanic_phone, 
-                   v.make, v.model, v.plate_number, v.id as car_id
+                   j.start_code, v.make, v.model, v.plate_number, v.id as car_id
             FROM jobs j 
             LEFT JOIN users u ON j.mechanic_id = u.id 
             JOIN vehicles v ON j.vehicle_id = v.id
             WHERE j.id = $1 AND j.owner_id = $2`;
-        const jobRes = await db.query(jobQuery, [jobId, req.session.userId]);
+        const job = await db.query(jobQuery, [jobId, req.session.userId]);
 
-        if (jobRes.rows.length === 0) return res.send("Job not found.");
+        if (job.rows.length === 0) return res.send("Job not found.");
+
+        // Ensure accepted jobs always have a start code, even if they were accepted via older paths.
+        // if (job.rows[0].status === 'accepted' && !job.rows[0].start_code) {
+        //     const startCode = generateCode();
+        //     await db.query('UPDATE jobs SET start_code = $1 WHERE id = $2', [startCode, jobId]);
+        //     job.rows[0].start_code = startCode;
+        // }
 
         // 2. Fetch Checklist
         const checklist = await db.query('SELECT * FROM job_checklists WHERE job_id = $1 ORDER BY id ASC', [jobId]);
@@ -344,7 +365,8 @@ app.get('/owner/track-job/:id', isAuthenticated, async (req, res) => {
         const finalTotal = mechanicFee + partsTotal;
 
         res.render('owner/job-tracking', {
-            job: jobRes.rows[0],
+            userId: req.session.userId,
+            job: job.rows[0],
             checklist: checklist.rows,
             parts: parts.rows,
             mechanicFee,
@@ -387,7 +409,8 @@ app.get('/owner/job-details/:id', isAuthenticated, async (req, res) => {
 
         res.render('owner/job-details', {
             job: jobResult.rows[0],
-            parts: partsResult.rows
+            parts: partsResult.rows,
+            userId: req.session.userId
         });
 
     } catch (err) {
@@ -415,13 +438,19 @@ app.post('/owner/profile/update', isAuthenticated, async (req, res) => {
 // GET: Book Maintenance
 app.get('/owner/book-maintenance', isAuthenticated, async (req, res) => {
     const cars = await db.query('SELECT * FROM vehicles WHERE owner_id = $1', [req.session.userId]);
-    res.render('owner/book-maintenance', { cars: cars.rows });
+    res.render('owner/book-maintenance', { 
+        cars: cars.rows,
+        userId: req.session.userId
+    });
 });
 
 // GET: Show Diagnostics Page
 app.get('/owner/diagnostics', isAuthenticated, async (req, res) => {
     const cars = await db.query('SELECT * FROM vehicles WHERE owner_id = $1', [req.session.userId]);
-    res.render('owner/diagnostics', { cars: cars.rows });
+    res.render('owner/diagnostics', { 
+        cars: cars.rows,
+        userId: req.session.userId
+    });
 });
 
 // --- STEP 2: SHOW MECHANICS (RECEIVE POST FROM STEP 1) ---
@@ -448,32 +477,52 @@ app.post('/owner/select-mechanic', isAuthenticated, async (req, res) => {
         const result = await db.query(mechanicQuery, [filter]);
 
         res.render('owner/select-mechanic', { 
-            vehicle_id, service_type, scheduled_date, 
-            mechanics: result.rows 
+            vehicle_id, 
+            service_type, 
+            scheduled_date, 
+            mechanics: result.rows,
+            userId: req.session.userId
         });
     } catch (err) { console.error(err); }
 });
 
 // --- FINAL STEP: CONFIRM & SAVE JOB ---
-// --- FINAL STEP: SAVE & SHOW SUCCESS ---
 // STEP 2 -> STEP 3 (The Review Page)
 app.post('/owner/confirm-booking', isAuthenticated, async (req, res) => {
     const { vehicle_id, mechanic_id, service_type, scheduled_date } = req.body;
 
     try {
-        // Fetch Car and Mechanic names to show on the review page
         const vehicleResult = await db.query('SELECT * FROM vehicles WHERE id = $1', [vehicle_id]);
-        const mechanicResult = await db.query('SELECT id, full_name FROM users WHERE id = $1', [mechanic_id]);
+        const mechanicResult = await db.query('SELECT id, full_name, phone FROM users WHERE id = $1', [mechanic_id]);
+
+        // --- THE PROFESSIONAL FIX ---
+        if (mechanicResult.rows.length === 0) {
+            // Instead of res.send, we go back to the previous page with a custom error
+            const mechanics = await db.query("SELECT id, full_name FROM users WHERE role = 'mechanic'");
+            return res.render('owner/select-mechanic', {
+                vehicle_id,
+                service_type,
+                scheduled_date,
+                mechanics: mechanics.rows,
+                error: 'The selected mechanic is no longer available. Please choose another.',
+                userId: req.session.userId
+            });
+        }
 
         res.render('owner/confirm-booking', {
             vehicle: vehicleResult.rows[0],
             mechanic: mechanicResult.rows[0],
             service_type,
-            scheduled_date
+            scheduled_date,
+            userId: req.session.userId
         });
     } catch (err) {
-        console.error(err);
-        res.status(500).send("Error loading confirmation page");
+        // Global Catch for Database Errors
+        res.render('owner/dashboard', {
+            error: 'Database connection lost. Please try again.',
+            userName: req.session.userName,
+            cars: [] // Fallback
+        });
     }
 });
 
@@ -512,7 +561,7 @@ app.post('/owner/finalize-booking', isAuthenticated, async (req, res) => {
         // PUSH REAL-TIME DATA TO MECHANIC
         broadcastJob(jobId);
 
-        res.render('owner/booking-success', { service: service_type, date: scheduled_date });
+        res.render('owner/booking-success', { service: service_type, date: scheduled_date, userId: req.session.userId });
     } catch (err) { console.error(err); }
 });
 
@@ -521,7 +570,7 @@ app.get('/owner/car/:id/edit', isAuthenticated, async (req, res) => {
     try {
         const result = await db.query('SELECT * FROM vehicles WHERE id = $1 AND owner_id = $2', [req.params.id, req.session.userId]);
         if (result.rows.length === 0) return res.send("Car not found");
-        res.render('owner/edit-car', { car: result.rows[0] });
+        res.render('owner/edit-car', { car: result.rows[0], userId: req.session.userId });
     } catch (err) { console.error(err); }
 });
 
@@ -563,7 +612,11 @@ app.post('/owner/car/:id/delete', isAuthenticated, async (req, res) => {
 app.get('/owner/sos', isAuthenticated, async (req, res) => {
     try {
         const cars = await db.query('SELECT * FROM vehicles WHERE owner_id = $1', [req.session.userId]);
-        res.render('owner/sos', { userName: req.session.userName, cars: cars.rows });
+        res.render('owner/sos', { 
+            userName: req.session.userName, 
+            cars: cars.rows,
+            userId: req.session.userId
+        });
     } catch (err) {
         console.error(err);
         res.status(500).send("Error loading SOS page");
@@ -574,7 +627,8 @@ app.get('/owner/sos', isAuthenticated, async (req, res) => {
     app.get('/sos', isAuthenticated, async (req, res) => {
         // We pass the userName so the SOS page can show "Stay calm, [Name]"
         res.render('owner/sos', { 
-            userName: req.session.userName 
+            userName: req.session.userName,
+            userId: req.session.userId
         });
     });
 
@@ -633,7 +687,8 @@ app.get('/mechanic/earnings', isAuthenticated, async (req, res) => {
         res.render('mechanic/earnings', {
             todayEarnings,
             totalEarnings,
-            jobs
+            jobs,
+            userId: req.session.userId
         });
     } catch (err) {
         console.error(err);
@@ -656,7 +711,8 @@ app.get('/mechanic/profile', isAuthenticated, async (req, res) => {
         res.render('mechanic/profile', { 
             user: userRes.rows[0], 
             reviews: reviewsRes.rows,
-            totalEarnings: earningsRes.rows[0].sum || 0
+            totalEarnings: earningsRes.rows[0].sum || 0,
+            userId: req.session.userId
         });
     } catch (err) { res.status(500).send("Error"); }
 });
@@ -692,7 +748,8 @@ app.get('/logout', (req, res) => {
 
             res.render('mechanic/job-card', { 
                 job: result.rows[0], 
-                parts: partsResult.rows 
+                parts: partsResult.rows,
+                mechanicId: req.session.userId
             });
         } catch (err) {
             console.error(err);
@@ -759,6 +816,29 @@ app.get('/logout', (req, res) => {
         } catch (err) { console.error(err); res.status(500).send("Error saving rating"); }
     });
 
+    // --- API: UPDATE OWNER LIVE LOCATION ---
+    app.post('/api/owner/update-location', isAuthenticated, async (req, res) => {
+        const { lat, lng } = req.body;
+
+        const latitude = Number(lat);
+        const longitude = Number(lng);
+
+        if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+            return res.status(400).json({ success: false, message: 'Invalid coordinates.' });
+        }
+
+        try {
+            await db.query(
+                'UPDATE users SET location_lat = $1, location_lng = $2 WHERE id = $3',
+                [latitude, longitude, req.session.userId]
+            );
+            res.json({ success: true });
+        } catch (err) {
+            console.error('Owner location update error:', err);
+            res.status(500).json({ success: false, message: 'Failed to update location.' });
+        }
+    });
+
     // --- HELPER: GET MECHANIC AVG RATING ---
     async function getMechanicRating(mechId) {
         const res = await db.query('SELECT AVG(rating) as average FROM reviews WHERE mechanic_id = $1', [mechId]);
@@ -793,6 +873,7 @@ app.get('/logout', (req, res) => {
         try {
             const result = await db.query(`
                 SELECT j.*, u.full_name as owner_name, u.phone as owner_phone,
+                    u.location_lat, u.location_lng,
                     v.make, v.model, v.plate_number, v.fuel_type, v.tyre_size
                 FROM jobs j
                 JOIN users u ON j.owner_id = u.id
@@ -844,19 +925,80 @@ app.get('/logout', (req, res) => {
     app.post('/api/mechanic/verify-problem', isAuthenticated, async (req, res) => {
         const { jobId } = req.body;
         try {
-            // Change status to 'fixing' (This acts as your "Pending" verified state)
+            const jobRes = await db.query('SELECT owner_id FROM jobs WHERE id = $1', [jobId]);
+            if (jobRes.rows.length === 0) return res.status(404).send('Job not found');
+
+            // Change status to active repair after mechanic has reached and approved the issue.
             await db.query("UPDATE jobs SET status = 'fixing' WHERE id = $1", [jobId]);
-            
-            // AUTO-GENERATE CHECKLIST
-            const tasks = ['Initial Inspection', 'Fluid Level Check', 'Diagnostic Scan', 'Safety Test'];
-            for (let t of tasks) {
-                await db.query('INSERT INTO job_checklists (job_id, task_description) VALUES ($1, $2)', [jobId, t]);
+
+            // AUTO-GENERATE CHECKLIST ONCE
+            const checklistCount = await db.query('SELECT COUNT(*) as count FROM job_checklists WHERE job_id = $1', [jobId]);
+            if (Number(checklistCount.rows[0].count) === 0) {
+                const tasks = ['Initial Inspection', 'Fluid Level Check', 'Diagnostic Scan', 'Safety Test'];
+                for (let t of tasks) {
+                    await db.query('INSERT INTO job_checklists (job_id, task_description) VALUES ($1, $2)', [jobId, t]);
+                }
             }
-            
+
+            const ownerId = jobRes.rows[0].owner_id;
+            io.to('user_' + ownerId).emit('job_progress_update', {
+                jobId,
+                status: 'fixing',
+                stage: 'problem_approved',
+                message: 'Mechanic has approved the problem and started the repair.'
+            });
+            io.to('user_' + ownerId).emit('checklist_activated', { jobId });
+
             io.emit('job_verified', { jobId });
             res.json({ success: true });
         } catch (err) { console.error(err); res.status(500).send("Error verifying problem"); }
     });
+
+    // --- NEW ACTION: MECHANIC REACHED THE CAR ---
+    app.post('/api/mechanic/reached-car', isAuthenticated, async (req, res) => {
+        const { jobId } = req.body;
+        try {
+            const jobRes = await db.query('SELECT owner_id, mechanic_id FROM jobs WHERE id = $1', [jobId]);
+            if (jobRes.rows.length === 0) return res.status(404).json({ success: false, message: 'Job not found.' });
+
+            await db.query("UPDATE jobs SET status = 'diagnosing' WHERE id = $1", [jobId]);
+
+            io.to('user_' + jobRes.rows[0].owner_id).emit('job_progress_update', {
+                jobId,
+                status: 'diagnosing',
+                stage: 'arrived',
+                message: 'Mechanic has reached your car and started inspection.'
+            });
+
+            res.json({ success: true });
+        } catch (err) {
+            console.error(err);
+            res.status(500).json({ success: false, message: 'Error updating arrival status.' });
+        }
+    });
+
+    // --- API: VERIFY START CODE ---
+    // app.post('/api/mechanic/verify-start-code', isAuthenticated, async (req, res) => {
+    //     const { jobId, codeInput } = req.body;
+    //     try {
+    //         const job = await db.query('SELECT start_code FROM jobs WHERE id = $1', [jobId]);
+
+    //         if (job.rows.length === 0) {
+    //             return res.status(404).json({ success: false, message: 'Job not found.' });
+    //         }
+
+    //         if (job.rows[0].start_code === codeInput) {
+    //             await db.query("UPDATE jobs SET status = 'fixing' WHERE id = $1", [jobId]);
+    //             req.io.emit('job_started_live', { jobId });
+    //             return res.json({ success: true });
+    //         }
+
+    //         return res.json({ success: false, message: 'Invalid Code. Ask owner for the 4-digit code.' });
+    //     } catch (err) {
+    //         console.error(err);
+    //         return res.status(500).send('Error');
+    //     }
+    // });
 
     // --- UPDATE JOB STATUS/STAGE ---
     app.post('/api/mechanic/update-stage', isAuthenticated, async (req, res) => {
@@ -866,7 +1008,21 @@ app.get('/logout', (req, res) => {
         try {
             // Update job status and assign mechanic if accepting
             if (newStatus === 'accepted') {
-                await db.query("UPDATE jobs SET status = $1, mechanic_id = $2 WHERE id = $3", [newStatus, mechId, jobId]);
+                // const startCode = generateCode();
+                await db.query(
+                    "UPDATE jobs SET status = $1, mechanic_id = $2 WHERE id = $3",
+                    [newStatus, mechId, jobId]
+                );
+
+                const jobRes = await db.query('SELECT owner_id FROM jobs WHERE id = $1', [jobId]);
+                if (jobRes.rows.length > 0) {
+                    io.to('user_' + jobRes.rows[0].owner_id).emit('job_progress_update', {
+                        jobId,
+                        status: 'accepted',
+                        stage: 'accepted',
+                        message: 'A mechanic accepted your job and is heading to your location.'
+                    });
+                }
             } else {
                 await db.query("UPDATE jobs SET status = $1 WHERE id = $2", [newStatus, jobId]);
             }
@@ -905,8 +1061,28 @@ app.get('/logout', (req, res) => {
     app.post('/api/mechanic/respond-appointment', isAuthenticated, async (req, res) => {
         const { jobId, decision } = req.body; // decision: 'accepted' or 'cancelled'
         try {
-            await db.query('UPDATE jobs SET status = $1, mechanic_id = $2 WHERE id = $3', 
-                           [decision, req.session.userId, jobId]);
+            if (decision === 'accepted') {
+                // const startCode = generateCode();
+                await db.query(
+                    'UPDATE jobs SET status = $1, mechanic_id = $2 WHERE id = $3',
+                    [decision, req.session.userId, jobId]
+                );
+
+                const jobRes = await db.query('SELECT owner_id FROM jobs WHERE id = $1', [jobId]);
+                if (jobRes.rows.length > 0) {
+                    io.to('user_' + jobRes.rows[0].owner_id).emit('job_progress_update', {
+                        jobId,
+                        status: 'accepted',
+                        stage: 'accepted',
+                        message: 'A mechanic accepted your booking and is on the way.'
+                    });
+                }
+            } else {
+                await db.query(
+                    'UPDATE jobs SET status = $1, mechanic_id = $2 WHERE id = $3',
+                    [decision, req.session.userId, jobId]
+                );
+            }
             
             // Notify owner via Socket
             io.emit('appointment_update', { jobId, decision, mechanicName: req.session.userName });
@@ -916,7 +1092,10 @@ app.get('/logout', (req, res) => {
 
     // 1. GET: Show the Quote Form
     app.get('/mechanic/job/:id/quote', isAuthenticated, (req, res) => {
-        res.render('mechanic/quote-part', { jobId: req.params.id });
+        res.render('mechanic/quote-part', { 
+        jobId: req.params.id,
+        userId: req.session.userId
+    });
     });
 
     // 2. POST: Process the Quote & Notify Owner
@@ -1026,7 +1205,13 @@ app.post('/mechanic/job/:id/complete', isAuthenticated, async (req, res) => {
 
 // --- SOCKET.IO REAL-TIME LOGIC ---
 io.on('connection', async (socket) => {
-    console.log('User connected: ' + socket.id);
+    console.log('📡 User Online:', socket.id);
+
+    // Join a private room based on User ID so we can send targeted alerts.
+    socket.on('join_room', (userId) => {
+        socket.join('user_' + userId);
+        console.log(`👤 User ${userId} joined their private notification room.`);
+    });
 
     // Check if this is an online mechanic and join them to the room
     const session = socket.request.session;
@@ -1057,6 +1242,12 @@ io.on('connection', async (socket) => {
     socket.on('emergency_sos', async (data) => {
         try {
             const userId = socket.request.session.userId;
+
+            // Keep owner's latest precise coordinates for mechanic navigation, including refreshes.
+            await db.query(
+                'UPDATE users SET location_lat = $1, location_lng = $2 WHERE id = $3',
+                [data.lat, data.lng, userId]
+            );
             
             // 1. Save Job with the EXACT coordinates provided by the owner's GPS
             const newJob = await db.query(
@@ -1075,6 +1266,7 @@ io.on('connection', async (socket) => {
             // 4. PUSH TO MECHANICS
             io.emit('new_job_pushed', {
                 id: jobId,
+                owner_id: userId,
                 owner_name: data.ownerName,
                 make: car.make,
                 model: car.model,
@@ -1102,40 +1294,83 @@ io.on('connection', async (socket) => {
         } catch (err) { console.error(err); }
     });
 
-    // --- UPDATED: Mechanic Accepts Job ---
     socket.on('accept_job', async (data) => {
-        try {
-            const mechanicId = socket.request.session.userId;
+        const mechanicId = socket.request.session.userId;
+        const jobId = data.jobId;
 
-            // 1. Fetch detailed mechanic info for the owner
+        try {
+            // 1. ATOMIC CHECK: Is the job still available?
+            const checkJob = await db.query('SELECT mechanic_id, status, owner_id FROM jobs WHERE id = $1', [jobId]);
+
+            if (checkJob.rows.length === 0) {
+                return socket.emit('app_notification', {
+                    message: 'Job no longer exists.',
+                    type: 'error'
+                });
+            }
+
+            if (checkJob.rows[0].mechanic_id !== null) {
+                return socket.emit('app_notification', {
+                    message: 'Too late! Another mechanic already accepted this job.',
+                    type: 'error'
+                });
+            }
+
+            // 2. TIE-BREAKER LOGIC: Fetch this mechanic's rating
             const mechRes = await db.query(`
-                SELECT u.full_name, u.phone, 
-                (SELECT COUNT(*) FROM jobs WHERE mechanic_id = u.id AND status = 'completed') as jobs_done
-                FROM users u WHERE u.id = $1`, [mechanicId]);
-            
+                SELECT u.full_name, u.phone, COALESCE(AVG(r.rating), 0) as avg_rating
+                FROM users u LEFT JOIN reviews r ON u.id = r.mechanic_id
+                WHERE u.id = $1 GROUP BY u.id`, [mechanicId]);
+
+            if (mechRes.rows.length === 0) {
+                return socket.emit('app_notification', {
+                    message: 'Mechanic profile not found.',
+                    type: 'error'
+                });
+            }
+
             const mech = mechRes.rows[0];
-            
-            // 2. Update the database
-            const res = await db.query(
-                'UPDATE jobs SET mechanic_id = $1, status = $2 WHERE id = $3 RETURNING owner_id', 
-                [mechanicId, 'accepted', data.jobId]
+            // 3. UPDATE DB: Assign mechanic without the Start Code
+            await db.query(
+                `UPDATE jobs SET mechanic_id = $1, status = 'accepted' WHERE id = $2`,
+                [mechanicId, jobId]
             );
 
-            // 3. Tell everyone this job is taken with enhanced mechanic details
+            // 4. NOTIFY OWNER: Send the acceptance event only
+            // io.to('user_' + checkJob.rows[0].owner_id).emit('job_accepted_with_code', {
+            //     mechanicName: mech.full_name,
+            //     mechanicPhone: mech.phone,
+            //     mechanicRating: mech.avg_rating,
+            //     startCode: startCode,
+            //     jobId: jobId
+            // });
+
+            // Keep legacy event for existing listeners
             io.emit('job_taken', {
-                jobId: data.jobId,
-                ownerId: res.rows[0].owner_id,
+                jobId: jobId,
+                ownerId: checkJob.rows[0].owner_id,
                 mechanicName: mech.full_name,
                 mechanicPhone: mech.phone,
-                mechanicRating: "4.9", // Static for now, can be dynamic later
-                jobsDone: mech.jobs_done
+                mechanicRating: mech.avg_rating
             });
 
-        } catch (err) { console.error(err); }
+            io.to('user_' + checkJob.rows[0].owner_id).emit('job_progress_update', {
+                jobId,
+                status: 'accepted',
+                stage: 'accepted',
+                mechanicName: mech.full_name,
+                message: 'A mechanic accepted your job and is driving to your location.'
+            });
+
+            // 5. CONFIRM TO MECHANIC
+            socket.emit('acceptance_success', { jobId: jobId });
+        } catch (err) {
+            console.error(err);
+        }
     });
 
     socket.on('disconnect', () => {
-        console.log('User disconnected');
+        console.log('📡 User Offline');
     });
 });
 

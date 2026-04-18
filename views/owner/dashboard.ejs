@@ -8,6 +8,16 @@
     <link rel="stylesheet" href="/css/alert.css">
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="/socket.io/socket.io.js"></script>
+    <!-- This line adds the icon to the browser tab -->
+<link rel="icon" type="image/png" href="/images/favicon.png">
+    <script>
+        const socket = io();
+        const globalUserId = "<%= userId %>";
+        if (globalUserId) {
+            socket.emit('join_room', globalUserId);
+            console.log('Owner joined private room:', globalUserId);
+        }
+    </script>
     <script src="/js/alert.js"></script>
     <style>
         /* PROFESSIONAL ANIMATIONS */
@@ -167,7 +177,6 @@
 
     <script>
         lucide.createIcons();
-        const socket = io();
         const currentUserId = '<%= userId %>';
 
         // Socket listener for when mechanic accepts job
@@ -194,6 +203,12 @@
             });
         });
 
+        socket.on('job_progress_update', (data) => {
+            AppAlert.show('Live Update', data.message || 'Your job status has changed.', 'info', () => {
+                location.href = '/owner/track-job/' + data.jobId;
+            });
+        });
+
         // 1. DYNAMIC GREETING & CLOCK
         function updateStatus() {
             const now = new Date();
@@ -209,11 +224,24 @@
         updateStatus();
 
         // 2. REAL-TIME LOCATION
+        async function updateOwnerLocation(lat, lng) {
+            try {
+                await fetch('/api/owner/update-location', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ lat, lng })
+                });
+            } catch (err) {
+                console.error('Failed to sync owner location:', err);
+            }
+        }
+
         if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(position => {
                 // For a real app, you'd use a Reverse Geocoding API here.
                 // For now, let's show they are in the detected city area.
                 document.getElementById('current-location').innerText = "Kampala Central, Uganda";
+                updateOwnerLocation(position.coords.latitude, position.coords.longitude);
             }, () => {
                 document.getElementById('current-location').innerText = "Kampala, Uganda";
             });
@@ -230,7 +258,7 @@
             <!-- Interactive Stars -->
             <div style="display: flex; justify-content: center; gap: 8px; margin: 20px 0;">
                 <% for(let i=1; i<=5; i++) { %>
-                    <i data-lucide="star" class="star-btn" onclick="selectRating(<%= i %>)" id="star-<%= i %>" style="cursor: pointer; color: #cbd5e1;"></i>
+                    <i data-lucide="star" class="star-btn" data-rating="<%= i %>" id="star-<%= i %>" style="cursor: pointer; color: #cbd5e1;"></i>
                 <% } %>
             </div>
 
@@ -241,15 +269,47 @@
         </div>
     </div>
 
+    <!-- UPDATED GLOBAL SOS MODAL -->
+    <div id="global-sos-modal" class="alert-overlay" style="display: none; align-items: center; justify-content: center;">
+        <div class="alert-card animate-pop-in" style="position: relative;">
+
+            <!-- THE NEW "X" CLOSE BUTTON -->
+            <button onclick="closeSOSPopup()" style="position: absolute; top: 15px; right: 15px; background: #f1f5f9; border: none; border-radius: 50%; width: 30px; height: 30px; cursor: pointer; color: #64748b;">
+                <i data-lucide="x" size="16"></i>
+            </button>
+
+            <div style="color: var(--emergency-red); margin-top: 10px;">
+                <i data-lucide="bell-ring" size="48" class="animate-bounce"></i>
+            </div>
+
+            <h2 style="margin: 15px 0;">New SOS!</h2>
+            <p id="sos-pop-details" style="font-weight: 700; color: #1e293b;"></p>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 25px;">
+                <button onclick="closeSOSPopup()" class="btn-outline" style="border-radius: 12px;">Later</button>
+                <button id="sos-pop-accept-btn" class="btn-primary" style="background: var(--emergency-red); border-radius: 12px;">Accept</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         let selectedStars = 0;
         let currentActiveJobId = null;
+
+        // Owner dashboard does not manage mechanic duty state; default to online for popup behavior.
+        const isOnline = true;
 
         socket.on('job_finished', (data) => {
             if (data.ownerId == currentUserId) {
                 currentActiveJobId = data.jobId;
                 document.getElementById('finish-modal').style.display = 'flex';
             }
+        });
+
+        document.querySelectorAll('.star-btn').forEach((star) => {
+            star.addEventListener('click', () => {
+                selectRating(Number(star.dataset.rating));
+            });
         });
 
         function selectRating(n) {
@@ -273,6 +333,41 @@
 
             location.reload(); // Refresh to clean dashboard
         }
+
+        function closeSOSPopup() {
+            // Just hides the modal. The job stays in the list/workflow for later.
+            document.getElementById('global-sos-modal').style.display = 'none';
+        }
+
+        function renderJobCard(job, containerId) {
+            const container = document.getElementById(containerId);
+            if (!container) return;
+            const item = document.createElement('div');
+            item.style.display = 'none';
+            item.dataset.jobId = job.id;
+            container.appendChild(item);
+        }
+
+        function acceptJob(jobId, ownerId) {
+            window.location.href = '/owner/track-job/' + jobId;
+        }
+
+        socket.on('new_job_pushed', (job) => {
+            if (!isOnline) return;
+
+            document.getElementById('sos-pop-details').innerText = `${job.owner_name} • ${job.service_type}`;
+            document.getElementById('sos-pop-accept-btn').onclick = () => acceptJob(job.id, job.owner_id);
+
+            document.getElementById('global-sos-modal').style.display = 'flex';
+            lucide.createIcons(); // Draw the 'X' icon
+
+            // The job still gets added to the list in the background
+            renderJobCard(job, 'dynamic-sos-container');
+        });
     </script>
+    <!-- Include these at the bottom of your <body> -->
+<link rel="stylesheet" href="/css/alerts.css">
+<script src="/js/alerts.js"></script>
+<%- include('../partials/alerts') %>
 </body>
 </html>
