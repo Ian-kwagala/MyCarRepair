@@ -188,14 +188,14 @@
         </div>
     </div>
 
-    <!-- GLOBAL SOS ALERT MODAL -->
+    <!-- GLOBAL INCOMING REQUEST MODAL -->
     <div id="global-sos-modal" class="alert-overlay" style="display: none;">
         <div class="alert-card animate-pop-in">
-            <div style="color: var(--emergency-red);"><i data-lucide="bell-ring" class="animate-bounce"></i></div>
-            <h2 style="margin: 15px 0;">New SOS Request!</h2>
+            <div id="incoming-icon-wrap" style="color: var(--emergency-red);"><i id="incoming-icon" data-lucide="bell-ring" class="animate-bounce"></i></div>
+            <h2 id="incoming-title" style="margin: 15px 0;">New SOS Request!</h2>
             <p id="sos-pop-details"></p>
             <div style="display: flex; gap: 10px; margin-top: 20px;">
-                <button onclick="ignoreSOS()" class="btn-outline" style="flex:1;">Decline</button>
+                <button onclick="ignoreSOS()" class="btn-outline" style="flex:1;">Dismiss</button>
                 <button id="sos-pop-accept-btn" class="btn-primary" style="flex:2; background: var(--emergency-red);">Accept Now</button>
             </div>
         </div>
@@ -345,6 +345,26 @@
                 primaryBtn.onclick = function () {
                     acceptJob(job.id);
                 };
+            } else if (!job.sos_active && job.status === 'pending') {
+                primaryBtn.textContent = 'Approve Booking';
+                primaryBtn.style.background = '#16a34a';
+                primaryBtn.onclick = function () {
+                    respondApp(job.id, 'accepted');
+                };
+
+                const actionWrap = primaryBtn.parentElement;
+                const declineBtn = document.createElement('button');
+                declineBtn.className = 'btn-outline';
+                declineBtn.style.cssText = 'grid-column: span 2; border-radius:10px; font-size:13px; font-weight:700; color:#dc2626; border-color:#fecaca; background:#fff1f2;';
+                declineBtn.innerHTML = '<i data-lucide="x-circle" size="14"></i> Decline Booking';
+                declineBtn.onclick = function () {
+                    AppAlert.confirm(
+                        'Decline Booking?',
+                        'This will notify the owner that you declined this request.',
+                        () => respondApp(job.id, 'cancelled')
+                    );
+                };
+                actionWrap.appendChild(declineBtn);
             } else {
                 primaryBtn.onclick = function () {
                     location.href = '/mechanic/job/' + job.id;
@@ -469,10 +489,36 @@
         socket.on('new_job_pushed', (job) => {
             if (!isOnline) return;
 
+            // Booking requests should appear in the bookings list without interruptive popup.
+            if (!job.sos_active) {
+                refreshDashboard();
+                return;
+            }
+
+            const incomingTitle = document.getElementById('incoming-title');
+            const incomingIconWrap = document.getElementById('incoming-icon-wrap');
+            const incomingIcon = document.getElementById('incoming-icon');
+            const acceptBtn = document.getElementById('sos-pop-accept-btn');
+
             // Show Modal immediately
             document.getElementById('sos-pop-details').innerText = `${job.owner_name} needs help with ${job.service_type}`;
-            document.getElementById('sos-pop-accept-btn').onclick = () => acceptJob(job.id, job.owner_id);
+
+            if (incomingTitle) incomingTitle.innerText = 'New SOS Request!';
+            if (incomingIconWrap) incomingIconWrap.style.color = 'var(--emergency-red)';
+            if (incomingIcon) {
+                incomingIcon.setAttribute('data-lucide', 'bell-ring');
+                incomingIcon.classList.add('animate-bounce');
+            }
+            if (acceptBtn) {
+                acceptBtn.innerText = 'Accept SOS';
+                acceptBtn.style.background = 'var(--emergency-red)';
+            }
+
+            document.getElementById('sos-pop-accept-btn').onclick = () => {
+                acceptJob(job.id, job.owner_id);
+            };
             document.getElementById('global-sos-modal').style.display = 'flex';
+            lucide.createIcons();
 
             // Add to list in background
             renderJobCard(job, 'dynamic-sos-container');
@@ -526,15 +572,32 @@
 
         // Respond to Appointment (Accept/Decline)
         async function respondApp(jobId, decision) {
-            const res = await fetch('/api/mechanic/respond-appointment', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ jobId, decision })
-            });
-            const data = await res.json();
-            if(data.success) {
+            try {
+                const res = await fetch('/api/mechanic/respond-appointment', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ jobId, decision })
+                });
+
+                let data = null;
+                try {
+                    data = await res.json();
+                } catch (parseErr) {
+                    data = null;
+                }
+
+                if (!res.ok || !data || data.success !== true) {
+                    return AppAlert.show(
+                        'Action Failed',
+                        (data && data.message) ? data.message : 'Could not process this booking action right now.',
+                        'error'
+                    );
+                }
+
                 AppAlert.show(decision === 'accepted' ? "Confirmed!" : "Declined", "Owner has been notified.", "success");
                 refreshDashboard();
+            } catch (err) {
+                AppAlert.show('Network Error', 'Unable to reach server. Please try again.', 'error');
             }
         }
 

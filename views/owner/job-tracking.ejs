@@ -69,7 +69,6 @@
     
 </head>
 <body>
-    <%- include('../partials/back-nav') %>
 
     <div class="track-header">
         <div style="display: flex; justify-content: space-between; align-items: flex-start;">
@@ -226,11 +225,18 @@
             if(data.jobId == '<%= job.id %>') {
                 // 1. Update the status indicator
                 document.getElementById('live-status').innerText = "Updated";
-                
-                // 2. Find the specific checklist item and mark it done
-                // Note: You would typically send the taskId from the server
-                // This is a simple version that refreshes the checkmark
-                location.reload(); 
+
+                // 2. Update task row live if available; otherwise fallback to reload.
+                const taskRow = data.taskId ? document.getElementById(`task-${data.taskId}`) : null;
+                if (taskRow) {
+                    if (data.isCompleted) {
+                        taskRow.classList.add('done');
+                    } else {
+                        taskRow.classList.remove('done');
+                    }
+                } else {
+                    location.reload();
+                }
             }
         });
 

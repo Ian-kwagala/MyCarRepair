@@ -194,12 +194,14 @@
         // Socket listener for appointment responses (accept/decline)
         socket.on('appointment_update', (data) => {
             const type = data.decision === 'accepted' ? 'success' : 'warning';
-            const msg = data.decision === 'accepted' ? 
-                `Mechanic ${data.mechanicName} has confirmed your booking!` : 
-                `Mechanic ${data.mechanicName} is unavailable. Please try another.`;
+            const msg = data.professionalMessage || (
+                data.decision === 'accepted'
+                    ? `Booking approved by ${data.mechanicName}. Contact: ${data.mechanicPhone || 'Not provided'}${data.garageLocation ? ` | Garage: ${data.garageLocation}` : ''}`
+                    : `Your booking request was declined by ${data.mechanicName}. Please select another available mechanic.`
+            );
 
             AppAlert.show("Booking Update", msg, type, () => {
-                location.href = '/owner/activity'; // Take them to see the updated status
+                location.href = data.decision === 'accepted' ? '/owner/activity' : '/owner/book-maintenance';
             });
         });
 
@@ -250,13 +252,17 @@
 
     <!-- RATING MODAL (Appears after job finish) -->
     <div id="finish-modal" class="alert-overlay" style="display: none;">
-        <div class="alert-card animate-pop-in">
+        <div class="alert-card animate-pop-in" style="position: relative;">
+            <button onclick="closeFinishModal()" style="position: absolute; top: 12px; right: 12px; background: #f1f5f9; border: none; border-radius: 50%; width: 30px; height: 30px; cursor: pointer; color: #64748b; display: flex; align-items: center; justify-content: center;">
+                <i data-lucide="x" size="16"></i>
+            </button>
+
             <div style="color: #fbbf24;"><i data-lucide="star" size="48" fill="#fbbf24"></i></div>
             <h3 style="margin: 15px 0 5px 0;">Rate Your Experience</h3>
             <p>How was the service provided by your mechanic?</p>
 
             <!-- Interactive Stars -->
-            <div style="display: flex; justify-content: center; gap: 8px; margin: 20px 0;">
+            <div id="rating-stars" style="display: flex; justify-content: center; gap: 8px; margin: 20px 0;">
                 <% for(let i=1; i<=5; i++) { %>
                     <i data-lucide="star" class="star-btn" data-rating="<%= i %>" id="star-<%= i %>" style="cursor: pointer; color: #cbd5e1;"></i>
                 <% } %>
@@ -265,6 +271,7 @@
             <textarea id="rating-feedback" placeholder="Optional: Tell us what you liked or what could be better..." 
                       style="width: 100%; border: 1.5px solid #e2e8f0; border-radius: 12px; padding: 12px; font-family: inherit; height: 80px; outline: none; margin-bottom: 20px;"></textarea>
 
+            <button onclick="closeFinishModal()" class="btn-outline" style="width: 100%; margin-bottom: 10px;">Skip for now</button>
             <button onclick="submitRating()" class="btn-primary" style="width: 100%;">Submit & Close</button>
         </div>
     </div>
@@ -295,43 +302,88 @@
     <script>
         let selectedStars = 0;
         let currentActiveJobId = null;
+        const pendingRatingJobId = '<%= pendingRatingJobId || "" %>';
+        const ratingStarsWrap = document.getElementById('rating-stars');
+        const ratingFeedbackInput = document.getElementById('rating-feedback');
+        const finishModal = document.getElementById('finish-modal');
+
+        // Render any late icons in this section and keep rating stars visible on first open.
+        lucide.createIcons();
 
         // Owner dashboard does not manage mechanic duty state; default to online for popup behavior.
         const isOnline = true;
 
+        function openRatingModal(jobId) {
+            currentActiveJobId = jobId;
+            selectedStars = 0;
+            if (ratingFeedbackInput) ratingFeedbackInput.value = '';
+            if (finishModal) finishModal.style.display = 'flex';
+
+            // Re-render icons in case they were replaced and re-apply default star state.
+            lucide.createIcons();
+            selectRating(0);
+        }
+
         socket.on('job_finished', (data) => {
             if (data.ownerId == currentUserId) {
-                currentActiveJobId = data.jobId;
-                document.getElementById('finish-modal').style.display = 'flex';
+                openRatingModal(data.jobId);
             }
         });
 
-        document.querySelectorAll('.star-btn').forEach((star) => {
-            star.addEventListener('click', () => {
-                selectRating(Number(star.dataset.rating));
+        // Fallback: if user missed real-time event, show pending unrated completed job.
+        if (pendingRatingJobId && !currentActiveJobId) {
+            openRatingModal(pendingRatingJobId);
+        }
+
+        // Use delegated click handling so stars remain clickable even after icon re-renders.
+        if (ratingStarsWrap) {
+            ratingStarsWrap.addEventListener('click', (event) => {
+                const clicked = event.target.closest('[data-rating]');
+                if (!clicked) return;
+                selectRating(Number(clicked.getAttribute('data-rating')));
             });
-        });
+        }
 
         function selectRating(n) {
             selectedStars = n;
             for(let i=1; i<=5; i++) {
                 const star = document.getElementById(`star-${i}`);
+                if (!star) continue;
                 star.style.color = (i <= n) ? "#fbbf24" : "#cbd5e1";
+                star.setAttribute('stroke', (i <= n) ? "#f59e0b" : "#cbd5e1");
                 star.setAttribute('fill', (i <= n) ? "#fbbf24" : "none");
+
+                // Lucide star path needs explicit fill update for immediate visual feedback.
+                const path = star.querySelector('path');
+                if (path) {
+                    path.setAttribute('fill', (i <= n) ? '#fbbf24' : 'none');
+                }
             }
         }
 
         async function submitRating() {
             if(selectedStars === 0) return AppAlert.show("Required", "Please select a star rating", "warning");
+            if(!currentActiveJobId) return AppAlert.show("Missing Job", "No completed job found to rate.", "warning");
 
             const feedback = document.getElementById('rating-feedback').value;
-            await fetch('/api/owner/rate-mechanic', {
+            const response = await fetch('/api/owner/rate-mechanic', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({ jobId: currentActiveJobId, rating: selectedStars, feedback: feedback })
             });
+            const result = await response.json();
+
+            if (!response.ok || result.success === false) {
+                return AppAlert.show("Error", result.message || "Could not submit rating.", "error");
+            }
 
             location.reload(); // Refresh to clean dashboard
+        }
+
+        function closeFinishModal() {
+            if (finishModal) finishModal.style.display = 'none';
+            selectedStars = 0;
+            selectRating(0);
         }
 
         function closeSOSPopup() {

@@ -87,7 +87,7 @@
     </div>
 
     <div style="padding: 25px 20px;">
-        <form action="/owner/select-mechanic" method="POST">
+        <form action="/owner/finalize-booking" method="POST">
             
             <label class="label-text reveal delay-1" style="font-weight: 700; margin-bottom: 15px; display: block;">STEP 1: SELECT SYMPTOMS</label>
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 10px;">
@@ -145,12 +145,12 @@
                 </div>
             </div>
 
-            <!-- Hidden Fields to trigger Step 2 (Select Mechanic) -->
+            <!-- Hidden booking fields for auto-dispatch -->
             <input type="hidden" name="service_type" value="Diagnostic Scan">
             <input type="hidden" name="scheduled_date" value="Immediate">
 
             <button type="submit" class="btn-primary reveal delay-4" style="width: 100%; margin-top: 40px; padding: 20px; border-radius: 20px; font-size: 16px; font-weight: 700; box-shadow: 0 15px 30px rgba(249, 115, 22, 0.3);">
-                Find Diagnostic Expert <i data-lucide="zap" size="18" style="margin-left: 8px;"></i>
+                Send Diagnostic Request <i data-lucide="zap" size="18" style="margin-left: 8px;"></i>
             </button>
         </form>
     </div>

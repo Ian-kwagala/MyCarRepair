@@ -8,6 +8,7 @@ const { Server } = require('socket.io');
 const bcrypt = require('bcryptjs');
 const db = require('./db'); // Import the DB connection 
 const session = require('express-session');
+const PgSession = require('connect-pg-simple')(session);
 const multer = require('multer');
 const PDFDocument = require('pdfkit');
 const fs = require('fs');
@@ -37,10 +38,24 @@ app.use((req, res, next) => {
 // --- SESSION SETUP ---
 // 1. Define the session middleware separately so we can share it
 const sessionMiddleware = session({
+    store: new PgSession({
+        conObject: {
+            user: process.env.DB_USER,
+            host: process.env.DB_HOST,
+            database: process.env.DB_NAME,
+            password: process.env.DB_PASSWORD,
+            port: process.env.DB_PORT,
+        },
+        tableName: 'user_sessions',
+        createTableIfMissing: true,
+    }),
     secret: 'mycarrepair_secret_key_2026',
     resave: false,
-    saveUninitialized: true,
-    cookie: { secure: false }
+    saveUninitialized: false,
+    cookie: {
+        secure: false,
+        maxAge: 1000 * 60 * 60 * 24 * 14,
+    }
 });
 
 // 2. Tell Express to use it
@@ -68,6 +83,29 @@ const storage = multer.diskStorage({
 });
 
 const upload = multer({ storage: storage });
+
+// Ensure booking decline status exists in Postgres enum values.
+async function ensureJobStatusEnumValues() {
+    try {
+        const enumCheck = await db.query(`
+            SELECT 1
+            FROM pg_enum e
+            JOIN pg_type t ON t.oid = e.enumtypid
+            WHERE t.typname = 'job_status' AND e.enumlabel = 'cancelled'
+            LIMIT 1
+        `);
+
+        if (enumCheck.rows.length === 0) {
+            await db.query("ALTER TYPE job_status ADD VALUE 'cancelled'");
+        }
+
+        console.log('job_status enum checked: cancelled value available.');
+    } catch (err) {
+        console.error('Enum migration warning (job_status.cancelled):', err.message);
+    }
+}
+
+ensureJobStatusEnumValues();
 
 // --- HELPER FUNCTION TO BROADCAST JOBS ---
 async function broadcastJob(jobId) {
@@ -103,6 +141,16 @@ function groupJobsByDate(jobs) {
         else groups.Older.push(job);
     });
     return groups;
+}
+
+function isPastScheduledDate(dateValue) {
+    if (!dateValue || dateValue === 'Immediate') return false;
+    const parsed = new Date(dateValue);
+    if (Number.isNaN(parsed.getTime())) return false;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    parsed.setHours(0, 0, 0, 0);
+    return parsed < today;
 }
 
 // --- ROUTES ---
@@ -243,12 +291,23 @@ app.get('/owner/dashboard', isAuthenticated, async (req, res) => {
     try {
         const vehicles = await db.query('SELECT * FROM vehicles WHERE owner_id = $1', [req.session.userId]);
         const activeJob = await db.query('SELECT * FROM jobs WHERE owner_id = $1 AND status != $2 LIMIT 1', [req.session.userId, 'completed']);
+        const pendingRatingJob = await db.query(`
+            SELECT j.id
+            FROM jobs j
+            LEFT JOIN reviews r ON r.job_id = j.id
+            WHERE j.owner_id = $1
+              AND j.status = 'completed'
+              AND r.id IS NULL
+            ORDER BY j.updated_at DESC, j.created_at DESC
+            LIMIT 1
+        `, [req.session.userId]);
         
         res.render('owner/dashboard', { 
             userName: req.session.userName, 
             userId: req.session.userId, // <--- ADD THIS LINE
             cars: vehicles.rows,
-            activeJob: activeJob.rows[0]
+            activeJob: activeJob.rows[0],
+            pendingRatingJobId: pendingRatingJob.rows[0] ? pendingRatingJob.rows[0].id : null
         });
     } catch (err) { console.error(err); res.send("Error loading dashboard"); }
 });
@@ -440,7 +499,8 @@ app.get('/owner/book-maintenance', isAuthenticated, async (req, res) => {
     const cars = await db.query('SELECT * FROM vehicles WHERE owner_id = $1', [req.session.userId]);
     res.render('owner/book-maintenance', { 
         cars: cars.rows,
-        userId: req.session.userId
+        userId: req.session.userId,
+        error: null
     });
 });
 
@@ -453,86 +513,42 @@ app.get('/owner/diagnostics', isAuthenticated, async (req, res) => {
     });
 });
 
-// --- STEP 2: SHOW MECHANICS (RECEIVE POST FROM STEP 1) ---
+// Legacy route compatibility: forward to new auto-dispatch booking flow.
 app.post('/owner/select-mechanic', isAuthenticated, async (req, res) => {
-    const { vehicle_id, service_type, scheduled_date } = req.body;
-
-    try {
-        // SMART FILTERING LOGIC
-        // It looks for mechanics whose 'expertise' column contains the 'service_type' string
-        const mechanicQuery = `
-            SELECT u.*, 
-                   COALESCE(AVG(r.rating), 0) as avg_rating,
-                   COUNT(r.id) as review_count
-            FROM users u 
-            LEFT JOIN reviews r ON u.id = r.mechanic_id
-            WHERE u.role = 'mechanic' AND u.is_online = true
-            AND (u.expertise ILIKE $1 OR u.expertise IS NULL) -- Filter by expertise
-            GROUP BY u.id
-            ORDER BY avg_rating DESC
-        `;
-        
-        // We look for parts of the string, e.g., '%Engine%'
-        const filter = `%${service_type.split(' ')[0]}%`; 
-        const result = await db.query(mechanicQuery, [filter]);
-
-        res.render('owner/select-mechanic', { 
-            vehicle_id, 
-            service_type, 
-            scheduled_date, 
-            mechanics: result.rows,
-            userId: req.session.userId
-        });
-    } catch (err) { console.error(err); }
-});
-
-// --- FINAL STEP: CONFIRM & SAVE JOB ---
-// STEP 2 -> STEP 3 (The Review Page)
-app.post('/owner/confirm-booking', isAuthenticated, async (req, res) => {
-    const { vehicle_id, mechanic_id, service_type, scheduled_date } = req.body;
-
-    try {
-        const vehicleResult = await db.query('SELECT * FROM vehicles WHERE id = $1', [vehicle_id]);
-        const mechanicResult = await db.query('SELECT id, full_name, phone FROM users WHERE id = $1', [mechanic_id]);
-
-        // --- THE PROFESSIONAL FIX ---
-        if (mechanicResult.rows.length === 0) {
-            // Instead of res.send, we go back to the previous page with a custom error
-            const mechanics = await db.query("SELECT id, full_name FROM users WHERE role = 'mechanic'");
-            return res.render('owner/select-mechanic', {
-                vehicle_id,
-                service_type,
-                scheduled_date,
-                mechanics: mechanics.rows,
-                error: 'The selected mechanic is no longer available. Please choose another.',
-                userId: req.session.userId
-            });
-        }
-
-        res.render('owner/confirm-booking', {
-            vehicle: vehicleResult.rows[0],
-            mechanic: mechanicResult.rows[0],
-            service_type,
-            scheduled_date,
-            userId: req.session.userId
-        });
-    } catch (err) {
-        // Global Catch for Database Errors
-        res.render('owner/dashboard', {
-            error: 'Database connection lost. Please try again.',
-            userName: req.session.userName,
-            cars: [] // Fallback
+    const { scheduled_date } = req.body;
+    if (isPastScheduledDate(scheduled_date)) {
+        const cars = await db.query('SELECT * FROM vehicles WHERE owner_id = $1', [req.session.userId]);
+        return res.status(400).render('owner/book-maintenance', {
+            cars: cars.rows,
+            userId: req.session.userId,
+            error: 'You cannot book a service in the past. Please choose today or a future date.'
         });
     }
+
+    return res.redirect(307, '/owner/finalize-booking');
+});
+
+// Legacy route compatibility: forward to new auto-dispatch booking flow.
+app.post('/owner/confirm-booking', isAuthenticated, async (req, res) => {
+    const { scheduled_date } = req.body;
+    if (isPastScheduledDate(scheduled_date)) {
+        return res.status(400).send('Invalid booking date. Please select today or a future date.');
+    }
+
+    return res.redirect(307, '/owner/finalize-booking');
 });
 
 // FINAL STEP: Actually save to Database
 app.post('/owner/finalize-booking', isAuthenticated, async (req, res) => {
-    const { vehicle_id, mechanic_id, service_type, scheduled_date } = req.body;
+    const { vehicle_id, service_type, scheduled_date } = req.body;
     try {
+        if (isPastScheduledDate(scheduled_date)) {
+            return res.status(400).send('Invalid booking date. Please select today or a future date.');
+        }
+
         const result = await db.query(
             'INSERT INTO jobs (owner_id, mechanic_id, vehicle_id, service_type, status) VALUES ($1, $2, $3, $4, $5) RETURNING id',
-            [req.session.userId, mechanic_id, vehicle_id, service_type, 'pending']
+            [req.session.userId, null, vehicle_id, service_type, 'pending']
         );
         
         const jobId = result.rows[0].id;
@@ -558,10 +574,27 @@ app.post('/owner/finalize-booking', isAuthenticated, async (req, res) => {
             );
         }
         
-        // PUSH REAL-TIME DATA TO MECHANIC
-        broadcastJob(jobId);
+        // Send booking requests to active mechanics (online_mechanics room).
+        const bookingInfo = await db.query(`
+            SELECT j.id, j.owner_id, j.vehicle_id, j.service_type, j.status, j.sos_active,
+                   u.full_name as owner_name, u.phone as owner_phone, u.location_lat, u.location_lng,
+                   v.make, v.model, v.plate_number
+            FROM jobs j
+            JOIN users u ON j.owner_id = u.id
+            JOIN vehicles v ON j.vehicle_id = v.id
+            WHERE j.id = $1
+        `, [jobId]);
 
-        res.render('owner/booking-success', { service: service_type, date: scheduled_date, userId: req.session.userId });
+        if (bookingInfo.rows.length > 0) {
+            io.to('online_mechanics').emit('new_job_pushed', bookingInfo.rows[0]);
+        }
+
+        res.render('owner/booking-success', {
+            service: service_type,
+            date: scheduled_date,
+            userId: req.session.userId,
+            state: 'pending_approval'
+        });
     } catch (err) { console.error(err); }
 });
 
@@ -791,6 +824,39 @@ app.get('/logout', (req, res) => {
                 'UPDATE job_checklists SET is_completed = $1, completed_at = $2 WHERE id = $3',
                 [isCompleted, isCompleted ? new Date() : null, taskId]
             );
+
+            // Push real-time checklist updates to the owner from the server source of truth.
+            const notifyRes = await db.query(`
+                SELECT c.job_id, j.owner_id
+                FROM job_checklists c
+                JOIN jobs j ON j.id = c.job_id
+                WHERE c.id = $1
+                LIMIT 1
+            `, [taskId]);
+
+            if (notifyRes.rows.length > 0) {
+                const { job_id: jobId, owner_id: ownerId } = notifyRes.rows[0];
+
+                const progressRes = await db.query(
+                    'SELECT COUNT(*)::int AS total, COUNT(*) FILTER (WHERE is_completed = true)::int AS completed FROM job_checklists WHERE job_id = $1',
+                    [jobId]
+                );
+
+                const totals = progressRes.rows[0] || { total: 0, completed: 0 };
+                const progress = Number(totals.total) > 0
+                    ? Math.round((Number(totals.completed) / Number(totals.total)) * 100)
+                    : 0;
+
+                io.to('user_' + ownerId).emit('task_update', {
+                    jobId,
+                    taskId,
+                    isCompleted,
+                    total: Number(totals.total),
+                    completed: Number(totals.completed),
+                    progress
+                });
+            }
+
             res.json({ success: true });
         } catch (err) {
             console.error('Task Update Error:', err);
@@ -802,11 +868,39 @@ app.get('/logout', (req, res) => {
     app.post('/api/owner/rate-mechanic', isAuthenticated, async (req, res) => {
         const { jobId, rating, feedback } = req.body;
         try {
-            // 1. Get the mechanic_id for this job
-            const jobRes = await db.query('SELECT mechanic_id FROM jobs WHERE id = $1', [jobId]);
+            // 1. Validate that this owner owns the completed job
+            const jobRes = await db.query(
+                'SELECT mechanic_id, owner_id, status FROM jobs WHERE id = $1',
+                [jobId]
+            );
+
+            if (jobRes.rows.length === 0) {
+                return res.status(404).json({ success: false, message: 'Job not found.' });
+            }
+
+            const job = jobRes.rows[0];
+            if (Number(job.owner_id) !== Number(req.session.userId)) {
+                return res.status(403).json({ success: false, message: 'Unauthorized rating attempt.' });
+            }
+
+            if (job.status !== 'completed') {
+                return res.status(400).json({ success: false, message: 'You can only rate completed jobs.' });
+            }
+
+            // 2. Prevent duplicate ratings for the same job
+            const existingRating = await db.query('SELECT id FROM reviews WHERE job_id = $1 LIMIT 1', [jobId]);
+            if (existingRating.rows.length > 0) {
+                return res.json({ success: true, message: 'Already rated.' });
+            }
+
+            // 3. Get the mechanic_id for this job
             const mechanicId = jobRes.rows[0].mechanic_id;
 
-            // 2. Insert the review
+            if (!mechanicId) {
+                return res.status(400).json({ success: false, message: 'No mechanic assigned to this job.' });
+            }
+
+            // 4. Insert the review
             await db.query(
                 'INSERT INTO reviews (job_id, mechanic_id, owner_id, rating, feedback) VALUES ($1, $2, $3, $4, $5)',
                 [jobId, mechanicId, req.session.userId, rating, feedback]
@@ -904,12 +998,13 @@ app.get('/logout', (req, res) => {
         
             const result = await db.query(query, [mechId]);
             const jobs = result.rows;
+            const openJobs = jobs.filter(j => !['completed', 'cancelled'].includes(j.status));
 
             res.json({
                 // SOS: all non‑completed SOS jobs (pending + in‑progress)
-                sos: jobs.filter(j => j.sos_active && j.status !== 'completed'),
+                sos: openJobs.filter(j => j.sos_active),
                 // Bookings: all non‑completed non‑SOS jobs (pending + in‑progress)
-                bookings: jobs.filter(j => !j.sos_active && j.status !== 'completed'),
+                bookings: openJobs.filter(j => !j.sos_active),
                 // Active: any job currently in progress (SOS or booking)
                 active: jobs.filter(j => ['accepted', 'diagnosing', 'fixing'].includes(j.status)),
                 // Completed history
@@ -961,14 +1056,25 @@ app.get('/logout', (req, res) => {
             const jobRes = await db.query('SELECT owner_id, mechanic_id FROM jobs WHERE id = $1', [jobId]);
             if (jobRes.rows.length === 0) return res.status(404).json({ success: false, message: 'Job not found.' });
 
-            await db.query("UPDATE jobs SET status = 'diagnosing' WHERE id = $1", [jobId]);
+            // When mechanic reaches the car, immediately start the job and activate checklist.
+            await db.query("UPDATE jobs SET status = 'fixing' WHERE id = $1", [jobId]);
+
+            const checklistCount = await db.query('SELECT COUNT(*) as count FROM job_checklists WHERE job_id = $1', [jobId]);
+            if (Number(checklistCount.rows[0].count) === 0) {
+                const tasks = ['Initial Inspection', 'Fluid Level Check', 'Diagnostic Scan', 'Safety Test'];
+                for (const task of tasks) {
+                    await db.query('INSERT INTO job_checklists (job_id, task_description) VALUES ($1, $2)', [jobId, task]);
+                }
+            }
 
             io.to('user_' + jobRes.rows[0].owner_id).emit('job_progress_update', {
                 jobId,
-                status: 'diagnosing',
+                status: 'fixing',
                 stage: 'arrived',
-                message: 'Mechanic has reached your car and started inspection.'
+                message: 'Mechanic has reached your car and started the repair.'
             });
+
+            io.to('user_' + jobRes.rows[0].owner_id).emit('checklist_activated', { jobId });
 
             res.json({ success: true });
         } catch (err) {
@@ -1061,12 +1167,33 @@ app.get('/logout', (req, res) => {
     app.post('/api/mechanic/respond-appointment', isAuthenticated, async (req, res) => {
         const { jobId, decision } = req.body; // decision: 'accepted' or 'cancelled'
         try {
+            if (!['accepted', 'cancelled'].includes(decision)) {
+                return res.status(400).json({ success: false, message: 'Invalid decision value.' });
+            }
+
+            const mechanicRes = await db.query(
+                'SELECT full_name, phone, garage_location FROM users WHERE id = $1',
+                [req.session.userId]
+            );
+
+            const jobOwnerRes = await db.query('SELECT owner_id FROM jobs WHERE id = $1', [jobId]);
+            if (jobOwnerRes.rows.length === 0) {
+                return res.status(404).send('Job not found');
+            }
+
+            const ownerId = jobOwnerRes.rows[0].owner_id;
+            const mechanic = mechanicRes.rows[0] || {};
+
             if (decision === 'accepted') {
                 // const startCode = generateCode();
-                await db.query(
-                    'UPDATE jobs SET status = $1, mechanic_id = $2 WHERE id = $3',
+                const updateRes = await db.query(
+                    "UPDATE jobs SET status = $1, mechanic_id = $2 WHERE id = $3 AND status = 'pending' AND mechanic_id IS NULL",
                     [decision, req.session.userId, jobId]
                 );
+
+                if (updateRes.rowCount === 0) {
+                    return res.status(409).json({ success: false, message: 'This booking is no longer available for approval.' });
+                }
 
                 const jobRes = await db.query('SELECT owner_id FROM jobs WHERE id = $1', [jobId]);
                 if (jobRes.rows.length > 0) {
@@ -1077,17 +1204,39 @@ app.get('/logout', (req, res) => {
                         message: 'A mechanic accepted your booking and is on the way.'
                     });
                 }
+
+                io.to('user_' + ownerId).emit('appointment_update', {
+                    jobId,
+                    decision,
+                    mechanicName: mechanic.full_name || req.session.userName,
+                    mechanicPhone: mechanic.phone || null,
+                    garageLocation: mechanic.garage_location || null,
+                    professionalMessage: `Booking approved by ${mechanic.full_name || req.session.userName}. Contact: ${mechanic.phone || 'Not provided'}${mechanic.garage_location ? ` | Garage: ${mechanic.garage_location}` : ''}`
+                });
             } else {
-                await db.query(
-                    'UPDATE jobs SET status = $1, mechanic_id = $2 WHERE id = $3',
+                const updateRes = await db.query(
+                    "UPDATE jobs SET status = $1, mechanic_id = $2 WHERE id = $3 AND status = 'pending' AND mechanic_id IS NULL",
                     [decision, req.session.userId, jobId]
                 );
+
+                if (updateRes.rowCount === 0) {
+                    return res.status(409).json({ success: false, message: 'This booking was already handled by another mechanic.' });
+                }
+
+                io.to('user_' + ownerId).emit('appointment_update', {
+                    jobId,
+                    decision,
+                    mechanicName: mechanic.full_name || req.session.userName,
+                    mechanicPhone: mechanic.phone || null,
+                    garageLocation: mechanic.garage_location || null,
+                    professionalMessage: `Your booking request was declined by ${mechanic.full_name || req.session.userName}. Please select another available mechanic.`
+                });
             }
             
-            // Notify owner via Socket
-            io.emit('appointment_update', { jobId, decision, mechanicName: req.session.userName });
             res.json({ success: true });
-        } catch (err) { res.status(500).send(err.message); }
+        } catch (err) {
+            res.status(500).json({ success: false, message: err.message || 'Failed to process booking response.' });
+        }
     });
 
     // 1. GET: Show the Quote Form
@@ -1194,6 +1343,7 @@ app.post('/mechanic/job/:id/complete', isAuthenticated, async (req, res) => {
 
         // 4. Notify the Owner instantly
         io.emit('job_finished', { 
+            jobId: jobId,
             ownerId: jobData.rows[0].owner_id, 
             receiptUrl: receiptPath,
             total: total 
@@ -1366,6 +1516,25 @@ io.on('connection', async (socket) => {
             socket.emit('acceptance_success', { jobId: jobId });
         } catch (err) {
             console.error(err);
+        }
+    });
+
+    // Fallback relay for legacy clients that still emit task_update from browser-side JS.
+    socket.on('task_update', async (data) => {
+        if (!data || !data.jobId) return;
+
+        try {
+            const ownerRes = await db.query('SELECT owner_id FROM jobs WHERE id = $1 LIMIT 1', [data.jobId]);
+            if (ownerRes.rows.length === 0) return;
+
+            io.to('user_' + ownerRes.rows[0].owner_id).emit('task_update', {
+                jobId: data.jobId,
+                taskId: data.taskId,
+                isCompleted: data.isCompleted,
+                progress: data.progress
+            });
+        } catch (err) {
+            console.error('task_update relay error:', err);
         }
     });
 

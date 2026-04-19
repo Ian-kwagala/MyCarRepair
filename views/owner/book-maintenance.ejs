@@ -127,17 +127,23 @@
                 <a href="/owner/dashboard" style="color: white; background: rgba(255,255,255,0.1); padding: 8px; border-radius: 12px; display: flex;"><i data-lucide="arrow-left" size="20"></i></a>
                 <h2 style="font-weight: 800; letter-spacing: -0.5px;">Book Maintenance</h2>
             </div>
-            <span style="font-size: 12px; font-weight: bold; opacity: 0.8;">Step 1 of 2</span>
+            <span style="font-size: 12px; font-weight: bold; opacity: 0.8;">Smart Dispatch</span>
         </div>
-        
-        <div class="progress-container">
-            <div class="progress-step"><div class="progress-fill"></div></div>
-            <div class="progress-step"></div>
-        </div>
+
+        <p style="margin-top: 14px; font-size: 12px; opacity: 0.85; max-width: 460px;">
+            Your request is instantly sent to active mechanics so you get a faster response.
+        </p>
     </div>
 
     <div style="padding: 25px 20px;">
-        <form action="/owner/select-mechanic" method="POST">
+        <% if (typeof error !== 'undefined' && error) { %>
+            <div style="background:#fee2e2; color:#991b1b; border:1px solid #fecaca; border-radius:12px; padding:12px 14px; margin-bottom:16px; font-size:13px; font-weight:700;">
+                <i data-lucide="alert-triangle" size="14" style="vertical-align:middle;"></i>
+                <span style="vertical-align:middle;"><%= error %></span>
+            </div>
+        <% } %>
+
+        <form action="/owner/finalize-booking" method="POST">
             <div class="animate-fade-up delay-1">
                 <label class="label-text" style="color: #64748b; font-weight: 700; font-size: 12px; text-transform: uppercase; letter-spacing: 1px;">Select Your Vehicle</label>
                 <div class="input-box">
@@ -200,18 +206,27 @@
                 <label class="label-text" style="color: #64748b; font-weight: 700; font-size: 12px; text-transform: uppercase; letter-spacing: 1px;">Preferred Date</label>
                 <div class="custom-select-group">
                     <i data-lucide="calendar-days" size="20" color="#94a3b8"></i>
-                    <input type="date" name="scheduled_date" required>
+                    <input type="date" id="scheduled-date" name="scheduled_date" required>
                 </div>
             </div>
 
             <button type="submit" class="btn-primary animate-fade-up delay-4" style="width: 100%; margin-top: 40px; padding: 20px; border-radius: 18px; font-size: 16px; box-shadow: 0 15px 30px rgba(249, 115, 22, 0.3);">
-                Find Available Mechanics <i data-lucide="search" size="18" style="margin-left: 8px;"></i>
+                Send Booking Request <i data-lucide="send" size="18" style="margin-left: 8px;"></i>
             </button>
         </form>
     </div>
 
     <script>
         lucide.createIcons();
+
+        const scheduleInput = document.getElementById('scheduled-date');
+        if (scheduleInput) {
+            const today = new Date();
+            const yyyy = today.getFullYear();
+            const mm = String(today.getMonth() + 1).padStart(2, '0');
+            const dd = String(today.getDate()).padStart(2, '0');
+            scheduleInput.min = `${yyyy}-${mm}-${dd}`;
+        }
     </script>
     <!-- Include these at the bottom of your <body> -->
 <link rel="stylesheet" href="/css/alerts.css">

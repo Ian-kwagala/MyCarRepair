@@ -63,8 +63,14 @@
         <i data-lucide="check" size="48" stroke-width="3"></i>
     </div>
 
-    <h1 style="color: #1e293b; font-weight: 800; font-size: 28px;">Booking Confirmed!</h1>
-    <p style="color: #64748b; margin-top: 10px;">Your appointment has been sent to the mechanic.</p>
+    <h1 style="color: #1e293b; font-weight: 800; font-size: 28px;">
+        <%= state === 'pending_approval' ? 'Booking Request Submitted' : 'Booking Confirmed!' %>
+    </h1>
+    <p style="color: #64748b; margin-top: 10px;">
+        <%= state === 'pending_approval'
+            ? 'Your request has been shared with active mechanics and is awaiting the first approval.'
+            : 'Your appointment has been sent to the mechanic.' %>
+    </p>
 
     <div class="summary-card">
         <div style="text-align: left;">
@@ -81,7 +87,7 @@
             </div>
 
             <div style="margin-top: 20px; padding-top: 20px; border-top: 1px dashed #e2e8f0;">
-                <p style="font-size: 13px; color: #1e293b;"><i data-lucide="info" size="14" style="vertical-align: middle;"></i> The mechanic will review your request and contact you shortly.</p>
+                <p style="font-size: 13px; color: #1e293b;"><i data-lucide="info" size="14" style="vertical-align: middle;"></i> <%= state === 'pending_approval' ? 'You will receive a professional update once an active mechanic approves or declines this booking.' : 'The mechanic will review your request and contact you shortly.' %></p>
             </div>
         </div>
     </div>

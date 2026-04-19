@@ -163,7 +163,7 @@
     <div class="sticky-actions">
         <% if (job.status === 'accepted') { %>
             <button onclick="markReachedCar()" class="btn-primary" style="width: 100%; border-radius: 14px;">
-                I've Reached The Car
+                I've Reached The Car - Start Checklist
             </button>
         <% } else if (job.status === 'diagnosing') { %>
             <button onclick="approveProblemAndStart()" class="btn-primary" style="width: 100%; border-radius: 14px; background: #0f172a;">
@@ -230,7 +230,7 @@
             });
             const data = await res.json();
             if (data.success) {
-                AppAlert.show('Arrival Recorded', 'Owner has been notified. Inspect and approve the problem next.', 'success', () => location.reload());
+                AppAlert.show('Job Started', 'Owner notified and checklist is now active.', 'success', () => location.reload());
             } else {
                 AppAlert.show('Error', data.message || 'Unable to update arrival status.', 'error');
             }
@@ -304,11 +304,7 @@
                     body: JSON.stringify({ taskId, isCompleted: isNowDone })
                 });
 
-                // Notify Owner's Live Tracker
-                socket.emit('task_update', { 
-                    jobId: '<%= job.id %>', 
-                    progress: (completed / total * 100) 
-                });
+                // Owner live tracker is updated by server after task persistence.
 
                 // Play success sound
                 new Audio('https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3').play();
