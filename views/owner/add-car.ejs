@@ -196,6 +196,78 @@
             margin-top: 8px;
         }
 
+        .camera-modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(2, 6, 23, 0.82);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            padding: 18px;
+        }
+
+        .camera-modal.active {
+            display: flex;
+        }
+
+        .camera-panel {
+            width: min(440px, 100%);
+            background: #0f172a;
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            border-radius: 18px;
+            padding: 14px;
+            color: #e2e8f0;
+            box-shadow: 0 24px 48px rgba(2, 6, 23, 0.4);
+        }
+
+        .camera-live {
+            width: 100%;
+            max-height: 60vh;
+            background: #020617;
+            border-radius: 14px;
+            object-fit: cover;
+        }
+
+        .camera-actions {
+            margin-top: 12px;
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .camera-btn {
+            border: none;
+            border-radius: 12px;
+            padding: 10px 14px;
+            font-size: 12px;
+            font-weight: 800;
+            cursor: pointer;
+        }
+
+        .camera-btn.capture {
+            background: #f97316;
+            color: #ffffff;
+        }
+
+        .camera-btn.done {
+            background: #16a34a;
+            color: #ffffff;
+        }
+
+        .camera-btn.cancel {
+            background: #334155;
+            color: #f8fafc;
+        }
+
+        #camera-status {
+            margin-top: 8px;
+            text-align: center;
+            font-size: 12px;
+            color: #cbd5e1;
+        }
+
         @keyframes riseFade {
             from {
                 opacity: 0;
@@ -238,7 +310,7 @@
     </div>
 
     <div class="form-container">
-        <form action="/owner/add-car" method="POST" enctype="multipart/form-data">
+        <form id="addCarForm" action="/owner/add-car" method="POST" enctype="multipart/form-data">
 
             <div class="form-section delay-1">
                 <span class="section-title">Identity</span>
@@ -292,13 +364,18 @@
 
             <div class="form-section delay-4">
                 <span class="section-title">Visuals</span>
-                <label class="photo-upload-zone">
+                <div class="photo-upload-zone">
                     <i data-lucide="camera" size="32" color="#94a3b8"></i>
-                    <p style="font-size: 12px; color: #64748b; font-weight: 700; margin-top: 8px;">Tap to upload car photos</p>
+                    <p style="font-size: 12px; color: #64748b; font-weight: 700; margin-top: 8px;">Choose how to add car photos</p>
                     <p class="helper-text">Upload multiple clear angles for faster mechanic diagnostics.</p>
-                    <input type="file" name="car_photos" id="car_photos" multiple accept="image/*" style="display: none;">
+                    <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 10px;">
+                        <button type="button" onclick="triggerCarPhotoSource('gallery')" style="border: none; background: #f1f5f9; color: #1e293b; padding: 9px 12px; border-radius: 10px; font-size: 12px; font-weight: 700; cursor: pointer;">Upload from Gallery</button>
+                        <button type="button" onclick="triggerCarPhotoSource('camera')" style="border: none; background: #f97316; color: white; padding: 9px 12px; border-radius: 10px; font-size: 12px; font-weight: 700; cursor: pointer;">Take Photo</button>
+                    </div>
+                    <input type="file" name="car_photos" id="car_photos_gallery" multiple accept="image/*" style="display: none;">
+                    <input type="file" name="car_photos" id="car_photos_camera" accept="image/*" capture="environment" style="display: none;">
                     <div id="preview-grid"></div>
-                </label>
+                </div>
             </div>
 
             <button type="submit" class="btn-primary submit-btn">
@@ -307,12 +384,43 @@
         </form>
     </div>
 
+    <div id="cameraModal" class="camera-modal" aria-hidden="true">
+        <div class="camera-panel">
+            <video id="cameraVideo" class="camera-live" autoplay playsinline muted></video>
+            <div id="camera-status">Camera ready. Capture up to 5 photos.</div>
+            <div class="camera-actions">
+                <button type="button" id="capturePhotoBtn" class="camera-btn capture">Capture Photo</button>
+                <button type="button" id="doneCameraBtn" class="camera-btn done">Done</button>
+                <button type="button" id="cancelCameraBtn" class="camera-btn cancel">Cancel</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         lucide.createIcons();
-        document.getElementById('car_photos').onchange = (e) => {
+        const carPhotosGallery = document.getElementById('car_photos_gallery');
+        const carPhotosCamera = document.getElementById('car_photos_camera');
+        const addCarForm = document.getElementById('addCarForm');
+        const cameraModal = document.getElementById('cameraModal');
+        const cameraVideo = document.getElementById('cameraVideo');
+        const cameraStatus = document.getElementById('camera-status');
+        const capturePhotoBtn = document.getElementById('capturePhotoBtn');
+        const doneCameraBtn = document.getElementById('doneCameraBtn');
+        const cancelCameraBtn = document.getElementById('cancelCameraBtn');
+
+        let activeCameraStream = null;
+        const cameraCapturedFiles = [];
+
+        function getAllSelectedFiles() {
+            const galleryFiles = Array.from(carPhotosGallery.files || []);
+            const cameraFiles = Array.from(carPhotosCamera.files || []);
+            return [...galleryFiles, ...cameraFiles];
+        }
+
+        function renderCarPreview(files) {
             const preview = document.getElementById('preview-grid');
             preview.innerHTML = '';
-            Array.from(e.target.files).forEach(file => {
+            Array.from(files).forEach(file => {
                 const reader = new FileReader();
                 reader.onload = (ev) => {
                     const img = document.createElement('img');
@@ -322,7 +430,103 @@
                 }
                 reader.readAsDataURL(file);
             });
+        }
+
+        function syncCameraInputFiles() {
+            const transfer = new DataTransfer();
+            cameraCapturedFiles.forEach((file) => transfer.items.add(file));
+            carPhotosCamera.files = transfer.files;
+        }
+
+        async function openCameraModal() {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                carPhotosCamera.click();
+                return;
+            }
+
+            try {
+                activeCameraStream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: { ideal: 'environment' } },
+                    audio: false
+                });
+                cameraVideo.srcObject = activeCameraStream;
+                cameraModal.classList.add('active');
+                cameraModal.setAttribute('aria-hidden', 'false');
+                cameraStatus.textContent = `Camera ready. Captured ${cameraCapturedFiles.length}/5.`;
+            } catch (error) {
+                alert('Camera access was blocked. Please allow camera permission, then try again.');
+            }
+        }
+
+        function closeCameraModal() {
+            cameraModal.classList.remove('active');
+            cameraModal.setAttribute('aria-hidden', 'true');
+            if (activeCameraStream) {
+                activeCameraStream.getTracks().forEach((track) => track.stop());
+                activeCameraStream = null;
+            }
+            cameraVideo.srcObject = null;
+        }
+
+        function captureFromCamera() {
+            if (!cameraVideo.videoWidth || !cameraVideo.videoHeight) return;
+            if (cameraCapturedFiles.length >= 5) {
+                cameraStatus.textContent = 'Maximum 5 photos reached.';
+                return;
+            }
+
+            const canvas = document.createElement('canvas');
+            canvas.width = cameraVideo.videoWidth;
+            canvas.height = cameraVideo.videoHeight;
+            const context = canvas.getContext('2d');
+            context.drawImage(cameraVideo, 0, 0, canvas.width, canvas.height);
+
+            canvas.toBlob((blob) => {
+                if (!blob) return;
+                const file = new File([blob], `camera-car-${Date.now()}.jpg`, { type: 'image/jpeg' });
+                cameraCapturedFiles.push(file);
+                syncCameraInputFiles();
+                renderCarPreview(getAllSelectedFiles());
+                cameraStatus.textContent = `Captured ${cameraCapturedFiles.length}/5. You can capture more or tap Done.`;
+            }, 'image/jpeg', 0.9);
+        }
+
+        function triggerCarPhotoSource(source) {
+            if (source === 'camera') {
+                openCameraModal();
+                return;
+            }
+            carPhotosGallery.click();
+        }
+
+        window.triggerCarPhotoSource = triggerCarPhotoSource;
+
+        capturePhotoBtn.addEventListener('click', captureFromCamera);
+        doneCameraBtn.addEventListener('click', () => {
+            closeCameraModal();
+            renderCarPreview(getAllSelectedFiles());
+        });
+        cancelCameraBtn.addEventListener('click', closeCameraModal);
+
+        carPhotosGallery.onchange = () => {
+            renderCarPreview(getAllSelectedFiles());
         };
+
+        // Fallback path for devices that use native capture input.
+        carPhotosCamera.onchange = () => {
+            renderCarPreview(getAllSelectedFiles());
+        };
+
+        addCarForm.addEventListener('submit', (e) => {
+            const hasGalleryFiles = carPhotosGallery.files && carPhotosGallery.files.length > 0;
+            const hasCameraFiles = carPhotosCamera.files && carPhotosCamera.files.length > 0;
+            if (!hasGalleryFiles && !hasCameraFiles) {
+                e.preventDefault();
+                alert('Please upload or take at least one car photo.');
+            }
+        });
+
+        window.addEventListener('beforeunload', closeCameraModal);
     </script>
     <!-- Include these at the bottom of your <body> -->
 <link rel="stylesheet" href="/css/alerts.css">

@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit User | Admin</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="/css/alerts.css">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="/js/alerts.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --panel-bg: rgba(255, 255, 255, 0.94);
+            --panel-border: #dbe3ef;
+            --panel-muted: #64748b;
+            --panel-strong: #0f172a;
+            --panel-accent: #f97316;
+            --panel-shadow: 0 24px 50px rgba(15, 23, 42, 0.12);
+        }
+
+        * {
+            font-family: 'Space Grotesk', 'Segoe UI', sans-serif;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background:
+                radial-gradient(circle at 12% 10%, rgba(14, 165, 233, 0.1), transparent 32%),
+                radial-gradient(circle at 88% 86%, rgba(249, 115, 22, 0.12), transparent 30%),
+                #f4f7fb;
+            padding: 84px 22px 28px;
+            color: var(--panel-strong);
+        }
+
+        .edit-shell {
+            max-width: 860px;
+            margin: 0 auto;
+            display: grid;
+            gap: 18px;
+        }
+
+        .hero-card {
+            background: linear-gradient(130deg, #0f172a, #1e293b 55%, #334155);
+            color: #f8fafc;
+            border-radius: 20px;
+            padding: 24px;
+            border: 1px solid rgba(148, 163, 184, 0.25);
+            box-shadow: 0 18px 36px rgba(15, 23, 42, 0.26);
+        }
+
+        .hero-title {
+            margin: 0;
+            font-size: clamp(1.5rem, 3.8vw, 2.1rem);
+            letter-spacing: -0.03em;
+        }
+
+        .hero-sub {
+            margin-top: 7px;
+            color: #cbd5e1;
+            font-size: 0.96rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .hero-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 14px;
+            padding: 7px 12px;
+            border-radius: 999px;
+            background: rgba(249, 115, 22, 0.18);
+            border: 1px solid rgba(249, 115, 22, 0.4);
+            color: #fed7aa;
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 0.03em;
+        }
+
+        .form-card {
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            border-radius: 20px;
+            box-shadow: var(--panel-shadow);
+            overflow: hidden;
+            backdrop-filter: blur(12px);
+        }
+
+        .form-grid {
+            padding: 24px;
+            display: grid;
+            gap: 16px;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .field {
+            display: grid;
+            gap: 8px;
+        }
+
+        .field.full {
+            grid-column: 1 / -1;
+        }
+
+        .field label {
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.12em;
+            color: var(--panel-muted);
+            text-transform: uppercase;
+        }
+
+        .field-box {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 11px 13px;
+            border-radius: 13px;
+            border: 1px solid #d8e1ee;
+            background: #ffffff;
+            transition: border-color 150ms ease, box-shadow 150ms ease;
+        }
+
+        .field-box:focus-within {
+            border-color: #fdba74;
+            box-shadow: 0 0 0 4px rgba(249, 115, 22, 0.14);
+        }
+
+        .field-box i {
+            color: #94a3b8;
+            flex: 0 0 auto;
+        }
+
+        .field-box input,
+        .field-box select {
+            width: 100%;
+            border: none;
+            outline: none;
+            background: transparent;
+            color: #0f172a;
+            font-size: 15px;
+            font-weight: 500;
+        }
+
+        .password-toggle {
+            border: none;
+            background: transparent;
+            color: #475569;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            padding: 0;
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.03em;
+            white-space: nowrap;
+        }
+
+        .password-toggle:hover {
+            color: #0f172a;
+        }
+
+        .helper-row {
+            grid-column: 1 / -1;
+            display: grid;
+            gap: 12px;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .mini-card {
+            border: 1px solid #e2e8f0;
+            border-radius: 14px;
+            background: #f8fafc;
+            padding: 14px;
+            font-size: 13px;
+            color: #475569;
+            display: grid;
+            gap: 6px;
+        }
+
+        .mini-card strong {
+            color: #0f172a;
+            font-size: 12px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .security-note {
+            grid-column: 1 / -1;
+            padding: 12px 14px;
+            border-radius: 12px;
+            border: 1px solid #fecaca;
+            background: #fff7f7;
+            color: #b91c1c;
+            font-size: 13px;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            padding: 0 24px 24px;
+            flex-wrap: wrap;
+        }
+
+        .btn-muted {
+            border: 1px solid #cbd5e1;
+            background: white;
+            color: #334155;
+            border-radius: 12px;
+            padding: 12px 16px;
+            font-weight: 700;
+            text-decoration: none;
+        }
+
+        .btn-save {
+            border: none;
+            background: linear-gradient(135deg, #f97316, #ea580c);
+            color: white;
+            border-radius: 12px;
+            padding: 12px 18px;
+            font-weight: 700;
+            min-width: 190px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            box-shadow: 0 12px 22px rgba(249, 115, 22, 0.28);
+            cursor: pointer;
+        }
+
+        .btn-save:disabled {
+            opacity: 0.65;
+            cursor: wait;
+        }
+
+        @media (max-width: 760px) {
+            body {
+                padding-top: 78px;
+            }
+
+            .form-grid,
+            .helper-row {
+                grid-template-columns: 1fr;
+            }
+
+            .actions {
+                padding-top: 6px;
+            }
+
+            .btn-muted,
+            .btn-save {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <%- include('../partials/back-nav') %>
+
+    <main class="edit-shell animate-pop-in">
+        <section class="hero-card">
+            <h1 class="hero-title">Edit User Account</h1>
+            <p class="hero-sub"><i data-lucide="shield-check" size="16"></i> User ID #<%= user.id %> • Admin Control Panel</p>
+            <span class="hero-pill"><i data-lucide="sparkles" size="14"></i> Secure profile maintenance</span>
+        </section>
+
+        <section class="form-card">
+            <form id="editUserForm" novalidate>
+                <input type="hidden" id="edit-id" value="<%= user.id %>">
+
+                <div class="form-grid">
+                    <div class="field full">
+                        <label for="edit-name">Full Name</label>
+                        <div class="field-box">
+                            <i data-lucide="user-round" size="18"></i>
+                            <input type="text" id="edit-name" value="<%= user.full_name || '' %>" placeholder="Enter full name" required>
+                        </div>
+                    </div>
+
+                    <div class="field full">
+                        <label for="edit-phone">Phone Number</label>
+                        <div class="field-box">
+                            <i data-lucide="phone" size="18"></i>
+                            <input type="text" id="edit-phone" value="<%= user.phone || '' %>" placeholder="Enter contact number">
+                        </div>
+                    </div>
+
+                    <div class="field">
+                        <label for="edit-role">Role</label>
+                        <div class="field-box">
+                            <i data-lucide="briefcase-business" size="18"></i>
+                            <select id="edit-role">
+                                <option value="owner" <%= user.role === 'owner' ? 'selected' : '' %>>Owner</option>
+                                <option value="mechanic" <%= user.role === 'mechanic' ? 'selected' : '' %>>Mechanic</option>
+                                <option value="admin" <%= user.role === 'admin' ? 'selected' : '' %>>Admin</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="field">
+                        <label for="edit-status">Status</label>
+                        <div class="field-box">
+                            <i data-lucide="activity" size="18"></i>
+                            <select id="edit-status">
+                                <option value="active" <%= user.status === 'active' ? 'selected' : '' %>>Active</option>
+                                <option value="pending" <%= user.status === 'pending' ? 'selected' : '' %>>Pending</option>
+                                <option value="suspended" <%= user.status === 'suspended' ? 'selected' : '' %>>Suspended</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="helper-row">
+                        <div class="mini-card">
+                            <strong>Current Email</strong>
+                            <span><%= user.email || 'Not provided' %></span>
+                        </div>
+                        <div class="mini-card">
+                            <strong>Current Status</strong>
+                            <span style="text-transform: capitalize;"><%= user.status || 'Unknown' %></span>
+                        </div>
+                    </div>
+
+                    <div class="field full">
+                        <label for="edit-pass">Reset Password</label>
+                        <div class="field-box">
+                            <i data-lucide="key-round" size="18"></i>
+                            <input type="password" id="edit-pass" placeholder="Leave blank to keep existing password">
+                            <button type="button" id="toggle-pass" class="password-toggle" aria-label="Show password" aria-pressed="false">
+                                <i data-lucide="eye" size="16"></i>
+                                Show
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="security-note">
+                        <i data-lucide="shield-alert" size="15"></i>
+                        Password updates are optional. A blank field keeps the current password unchanged.
+                    </div>
+                </div>
+
+                <div class="actions">
+                    <a class="btn-muted" href="/admin/users">Cancel</a>
+                    <button id="save-btn" type="submit" class="btn-save">
+                        <i data-lucide="save" size="16"></i>
+                        Save User Changes
+                    </button>
+                </div>
+            </form>
+        </section>
+    </main>
+
+    <script>
+        lucide.createIcons();
+
+        const form = document.getElementById('editUserForm');
+        const saveBtn = document.getElementById('save-btn');
+        const passwordInput = document.getElementById('edit-pass');
+        const togglePassBtn = document.getElementById('toggle-pass');
+
+        togglePassBtn.addEventListener('click', () => {
+            const isHidden = passwordInput.type === 'password';
+            passwordInput.type = isHidden ? 'text' : 'password';
+            togglePassBtn.setAttribute('aria-pressed', String(isHidden));
+            togglePassBtn.setAttribute('aria-label', isHidden ? 'Hide password' : 'Show password');
+            togglePassBtn.innerHTML = isHidden
+                ? '<i data-lucide="eye-off" size="16"></i> Hide'
+                : '<i data-lucide="eye" size="16"></i> Show';
+            lucide.createIcons();
+        });
+
+        form.addEventListener('submit', async (event) => {
+            event.preventDefault();
+
+            const fullName = document.getElementById('edit-name').value.trim();
+            if (!fullName) {
+                AppAlert.show('Missing Name', 'Please enter a full name before saving.', 'warning');
+                return;
+            }
+
+            const payload = {
+                userId: document.getElementById('edit-id').value,
+                full_name: fullName,
+                phone: document.getElementById('edit-phone').value.trim(),
+                role: document.getElementById('edit-role').value,
+                status: document.getElementById('edit-status').value,
+                newPassword: document.getElementById('edit-pass').value
+            };
+
+            const hasNewPassword = payload.newPassword && payload.newPassword.trim().length > 0;
+
+            saveBtn.disabled = true;
+            saveBtn.innerHTML = '<i data-lucide="loader-circle" size="16"></i> Saving...';
+            lucide.createIcons();
+
+            try {
+                const response = await fetch('/api/admin/update-user', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to update user details');
+                }
+
+                const successMessage = hasNewPassword
+                    ? 'User details and password were updated successfully.'
+                    : 'User details were updated successfully.';
+
+                AppAlert.show('Saved', successMessage, 'success', () => {
+                    location.href = '/admin/users';
+                });
+            } catch (error) {
+                AppAlert.show('Update Failed', 'Could not update this user right now. Please try again.', 'error');
+            } finally {
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = '<i data-lucide="save" size="16"></i> Save User Changes';
+                lucide.createIcons();
+            }
+        });
+    </script>
+</body>
+</html>

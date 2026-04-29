@@ -75,6 +75,96 @@
             border-color: #22c55e; border-style: solid;
             background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
         }
+        .photo-source-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 14px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .photo-source-btn {
+            border: none;
+            border-radius: 12px;
+            padding: 10px 14px;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .photo-source-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 8px 18px rgba(15, 23, 42, 0.12);
+        }
+        .photo-source-btn.gallery {
+            background: #f1f5f9;
+            color: #1e293b;
+        }
+        .photo-source-btn.camera {
+            background: #f97316;
+            color: #ffffff;
+        }
+        .camera-modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(2, 6, 23, 0.82);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            padding: 18px;
+        }
+        .camera-modal.active {
+            display: flex;
+        }
+        .camera-panel {
+            width: min(440px, 100%);
+            background: #0f172a;
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            border-radius: 18px;
+            padding: 14px;
+            color: #e2e8f0;
+            box-shadow: 0 24px 48px rgba(2, 6, 23, 0.4);
+        }
+        .camera-live {
+            width: 100%;
+            max-height: 60vh;
+            background: #020617;
+            border-radius: 14px;
+            object-fit: cover;
+        }
+        .camera-actions {
+            margin-top: 12px;
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .camera-btn {
+            border: none;
+            border-radius: 12px;
+            padding: 10px 14px;
+            font-size: 12px;
+            font-weight: 800;
+            cursor: pointer;
+        }
+        .camera-btn.capture {
+            background: #f97316;
+            color: #ffffff;
+        }
+        .camera-btn.done {
+            background: #16a34a;
+            color: #ffffff;
+        }
+        .camera-btn.cancel {
+            background: #334155;
+            color: #f8fafc;
+        }
+        #cameraStatus {
+            margin-top: 8px;
+            text-align: center;
+            font-size: 12px;
+            color: #cbd5e1;
+        }
         
         /* Photo Preview */
         .photo-preview {
@@ -186,15 +276,20 @@
 
             <div class="form-field animate-scale" style="animation-delay: 0.5s;">
                 <label class="label-text" style="font-size: 11px; font-weight: 900; color: #64748b; letter-spacing: 1.5px;">EVIDENCE PHOTOS</label>
-                <label id="photoBox" class="photo-box" style="display: block;">
+                <div id="photoBox" class="photo-box" style="display: block;">
                     <div style="position: relative; z-index: 1;">
                         <i data-lucide="camera" size="40" style="margin-bottom: 15px; color: var(--action-orange);" class="icon-bounce"></i>
-                        <p style="font-weight: 700; font-size: 15px; margin-bottom: 5px; color: #1e293b;">Upload Part Photos</p>
-                        <p style="font-size: 12px; opacity: 0.6;">Multiple photos allowed (up to 5)</p>
+                        <p style="font-weight: 700; font-size: 15px; margin-bottom: 5px; color: #1e293b;">Add Part Photos</p>
+                        <p id="photoHint" style="font-size: 12px; opacity: 0.6;">Choose gallery or camera (up to 5 photos)</p>
+                        <div class="photo-source-actions">
+                            <button type="button" class="photo-source-btn gallery" onclick="triggerPhotoSource('gallery')">Upload from Gallery</button>
+                            <button type="button" class="photo-source-btn camera" onclick="triggerPhotoSource('camera')">Take Photo</button>
+                        </div>
                     </div>
-                    <input type="file" id="photoInput" name="part_photos" multiple accept="image/*" required style="display: none;">
+                    <input type="file" id="photoInputGallery" name="part_photos" multiple accept="image/*" style="display: none;">
+                    <input type="file" id="photoInputCamera" name="part_photos" accept="image/*" capture="environment" style="display: none;">
                     <img id="photoPreview" class="photo-preview" alt="Preview">
-                </label>
+                </div>
             </div>
 
             <button type="submit" class="btn-primary btn-submit animate-scale" style="width: 100%; margin-top: 40px; padding: 22px; border-radius: 18px; font-size: 17px; font-weight: 800; display: flex; align-items: center; justify-content: center; gap: 10px; animation-delay: 0.6s;">
@@ -204,16 +299,113 @@
         </form>
     </div>
 
+    <div id="cameraModal" class="camera-modal" aria-hidden="true">
+        <div class="camera-panel">
+            <video id="cameraVideo" class="camera-live" autoplay playsinline muted></video>
+            <div id="cameraStatus">Camera ready. Capture up to 5 photos.</div>
+            <div class="camera-actions">
+                <button type="button" id="capturePhotoBtn" class="camera-btn capture">Capture Photo</button>
+                <button type="button" id="doneCameraBtn" class="camera-btn done">Done</button>
+                <button type="button" id="cancelCameraBtn" class="camera-btn cancel">Cancel</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         lucide.createIcons();
         
         // Photo Upload Preview (Multiple Files)
-        const photoInput = document.getElementById('photoInput');
+        const photoInputGallery = document.getElementById('photoInputGallery');
+        const photoInputCamera = document.getElementById('photoInputCamera');
         const photoBox = document.getElementById('photoBox');
         const photoPreview = document.getElementById('photoPreview');
-        
-        photoInput.addEventListener('change', function(e) {
-            const files = e.target.files;
+        const photoHint = document.getElementById('photoHint');
+        const cameraModal = document.getElementById('cameraModal');
+        const cameraVideo = document.getElementById('cameraVideo');
+        const cameraStatus = document.getElementById('cameraStatus');
+        const capturePhotoBtn = document.getElementById('capturePhotoBtn');
+        const doneCameraBtn = document.getElementById('doneCameraBtn');
+        const cancelCameraBtn = document.getElementById('cancelCameraBtn');
+
+        let activeCameraStream = null;
+        const capturedCameraFiles = [];
+
+        function getAllPhotoFiles() {
+            const galleryFiles = Array.from(photoInputGallery.files || []);
+            const cameraFiles = Array.from(photoInputCamera.files || []);
+            return [...galleryFiles, ...cameraFiles];
+        }
+
+        function syncCameraInputFiles() {
+            const transfer = new DataTransfer();
+            capturedCameraFiles.forEach((file) => transfer.items.add(file));
+            photoInputCamera.files = transfer.files;
+        }
+
+        async function openCameraModal() {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                photoInputCamera.click();
+                return;
+            }
+
+            try {
+                activeCameraStream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: { ideal: 'environment' } },
+                    audio: false
+                });
+                cameraVideo.srcObject = activeCameraStream;
+                cameraModal.classList.add('active');
+                cameraModal.setAttribute('aria-hidden', 'false');
+                cameraStatus.textContent = `Camera ready. Captured ${capturedCameraFiles.length}/5.`;
+            } catch (error) {
+                alert('Camera access was blocked. Please allow camera permission, then try again.');
+            }
+        }
+
+        function closeCameraModal() {
+            cameraModal.classList.remove('active');
+            cameraModal.setAttribute('aria-hidden', 'true');
+            if (activeCameraStream) {
+                activeCameraStream.getTracks().forEach((track) => track.stop());
+                activeCameraStream = null;
+            }
+            cameraVideo.srcObject = null;
+        }
+
+        function captureFromCamera() {
+            if (!cameraVideo.videoWidth || !cameraVideo.videoHeight) return;
+            if (capturedCameraFiles.length >= 5) {
+                cameraStatus.textContent = 'Maximum 5 photos reached.';
+                return;
+            }
+
+            const canvas = document.createElement('canvas');
+            canvas.width = cameraVideo.videoWidth;
+            canvas.height = cameraVideo.videoHeight;
+            const context = canvas.getContext('2d');
+            context.drawImage(cameraVideo, 0, 0, canvas.width, canvas.height);
+
+            canvas.toBlob((blob) => {
+                if (!blob) return;
+                const file = new File([blob], `camera-part-${Date.now()}.jpg`, { type: 'image/jpeg' });
+                capturedCameraFiles.push(file);
+                syncCameraInputFiles();
+                handlePhotoSelection(getAllPhotoFiles());
+                cameraStatus.textContent = `Captured ${capturedCameraFiles.length}/5. Capture more or tap Done.`;
+            }, 'image/jpeg', 0.9);
+        }
+
+        function triggerPhotoSource(source) {
+            if (source === 'camera') {
+                openCameraModal();
+                return;
+            }
+            photoInputGallery.click();
+        }
+
+        window.triggerPhotoSource = triggerPhotoSource;
+
+        function handlePhotoSelection(files) {
             if (files.length > 0) {
                 // Show preview of first image
                 const reader = new FileReader();
@@ -221,14 +413,27 @@
                     photoPreview.src = e.target.result;
                     photoPreview.style.display = 'block';
                     photoBox.classList.add('has-image');
-                    
-                    // Update text to show count
-                    const textElement = photoBox.querySelector('p:last-of-type');
-                    textElement.textContent = `${files.length} photo${files.length > 1 ? 's' : ''} selected`;
-                    textElement.style.color = '#22c55e';
+
+                    photoHint.textContent = `${files.length} photo${files.length > 1 ? 's' : ''} selected`;
+                    photoHint.style.color = '#22c55e';
                 }
                 reader.readAsDataURL(files[0]);
             }
+        }
+
+        capturePhotoBtn.addEventListener('click', captureFromCamera);
+        doneCameraBtn.addEventListener('click', () => {
+            closeCameraModal();
+            handlePhotoSelection(getAllPhotoFiles());
+        });
+        cancelCameraBtn.addEventListener('click', closeCameraModal);
+
+        photoInputGallery.addEventListener('change', function(e) {
+            handlePhotoSelection(getAllPhotoFiles());
+        });
+
+        photoInputCamera.addEventListener('change', function(e) {
+            handlePhotoSelection(getAllPhotoFiles());
         });
         
         // Form Submit Loading State
@@ -236,9 +441,19 @@
         const submitBtn = form.querySelector('.btn-submit');
         
         form.addEventListener('submit', function(e) {
+            const hasGalleryFiles = photoInputGallery.files && photoInputGallery.files.length > 0;
+            const hasCameraFiles = photoInputCamera.files && photoInputCamera.files.length > 0;
+            if (!hasGalleryFiles && !hasCameraFiles) {
+                e.preventDefault();
+                alert('Please upload or take at least one evidence photo.');
+                return;
+            }
+
             submitBtn.classList.add('loading');
             submitBtn.querySelector('span').textContent = 'Sending Quote...';
         });
+
+        window.addEventListener('beforeunload', closeCameraModal);
     </script>
     <!-- Include these at the bottom of your <body> -->
 <link rel="stylesheet" href="/css/alerts.css">

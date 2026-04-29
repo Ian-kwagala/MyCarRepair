@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Account Under Review | MyCarRepair</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="/css/auth.css">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="icon" type="image/png" href="/images/favicon.png">
+    <style>
+        .review-card {
+            background: #ffffff;
+            width: 100%;
+            max-width: 500px;
+            border-radius: 30px;
+            overflow: hidden;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.55);
+        }
+
+        .review-head {
+            background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%);
+            color: #ffffff;
+            text-align: center;
+            padding: 36px 30px 32px;
+        }
+
+        .review-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 7px 12px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 800;
+            background: rgba(255, 255, 255, 0.12);
+            border: 1px solid rgba(255, 255, 255, 0.28);
+        }
+
+        .review-body {
+            padding: 26px;
+            color: #1e293b;
+        }
+
+        .review-note {
+            margin-top: 16px;
+            background: #fff7ed;
+            border: 1px solid #fed7aa;
+            border-radius: 16px;
+            padding: 14px;
+            color: #9a3412;
+            font-size: 13px;
+            font-weight: 700;
+        }
+
+        .review-actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 22px;
+        }
+
+        .review-link {
+            text-decoration: none;
+            text-align: center;
+            padding: 13px;
+            border-radius: 12px;
+            font-weight: 800;
+            font-size: 14px;
+        }
+
+        .review-link.primary {
+            background: var(--action-orange);
+            color: #ffffff;
+        }
+
+        .review-link.ghost {
+            background: #f1f5f9;
+            color: #334155;
+        }
+    </style>
+</head>
+<body class="auth-page">
+    <div class="review-card">
+        <div class="review-head">
+            <span class="review-badge"><i data-lucide="shield-check" size="14"></i> Verification In Progress</span>
+            <h2 style="margin: 15px 0 8px 0; font-size: 30px; font-weight: 900; letter-spacing: -0.8px;">Application Under Review</h2>
+            <p style="opacity: 0.85; margin: 0; font-size: 14px;">Hi <%= userName || 'Mechanic' %>, our team is validating your mechanic account.</p>
+        </div>
+
+        <div class="review-body">
+            <p style="margin: 0; font-size: 14px; color: #475569; line-height: 1.65;">
+                You can sign in again once approval is complete. This review helps us keep the marketplace trusted for all car owners.
+            </p>
+
+            <div class="review-note">
+                Typical approval time: within a few hours during business hours.
+            </div>
+
+            <div class="review-actions">
+                <a href="/logout" class="review-link ghost">Sign Out</a>
+                <a href="/admin-contact" class="review-link primary">Contact Admin</a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        if (typeof lucide !== 'undefined') {
+            lucide.createIcons();
+        }
+    </script>
+</body>
+</html>

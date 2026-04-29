@@ -1,0 +1,89 @@
+<aside class="admin-sidebar-shell">
+    <style>
+        .admin-sidebar-shell {
+            width: 250px;
+            background: linear-gradient(180deg, #0f172a 0%, #111827 100%);
+            color: white;
+            padding: 22px;
+            position: fixed;
+            inset: 0 auto 0 0;
+            box-shadow: 8px 0 30px rgba(15, 23, 42, 0.28);
+            min-height: 100vh;
+        }
+
+        .admin-sidebar-brand {
+            margin-bottom: 26px;
+        }
+
+        .admin-sidebar-brand h2 {
+            margin: 0;
+            color: #f97316;
+            letter-spacing: -0.04em;
+        }
+
+        .admin-sidebar-brand p {
+            margin: 8px 0 0;
+            font-size: 10px;
+            opacity: 0.55;
+            letter-spacing: 0.28em;
+            text-transform: uppercase;
+        }
+
+        .admin-sidebar-link {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 14px;
+            border-radius: 14px;
+            text-decoration: none;
+            color: #cbd5e1;
+            font-weight: 700;
+            transition: transform 180ms ease, background 180ms ease, color 180ms ease;
+        }
+
+        .admin-sidebar-link:hover,
+        .admin-sidebar-link.active {
+            background: rgba(255, 255, 255, 0.08);
+            color: white;
+            transform: translateX(2px);
+        }
+
+        .admin-sidebar-link.logout {
+            margin-top: 18px;
+            color: #fca5a5;
+        }
+
+        @media (max-width: 860px) {
+            .admin-sidebar-shell {
+                position: static;
+                width: auto;
+                min-height: auto;
+                border-radius: 0 0 24px 24px;
+            }
+        }
+    </style>
+
+    <div class="admin-sidebar-brand">
+        <h2>MyCarRepair</h2>
+        <p>Admin Panel</p>
+    </div>
+
+    <nav style="display: grid; gap: 8px;">
+        <a href="/admin/dashboard" class="admin-sidebar-link">
+            <i data-lucide="layout-dashboard" size="18"></i>
+            Overview
+        </a>
+        <a href="/admin/users" class="admin-sidebar-link active">
+            <i data-lucide="users" size="18"></i>
+            User Management
+        </a>
+        <a href="/admin/system" class="admin-sidebar-link">
+            <i data-lucide="settings" size="18"></i>
+            System Settings
+        </a>
+        <a href="/logout" class="admin-sidebar-link logout">
+            <i data-lucide="log-out" size="18"></i>
+            Logout
+        </a>
+    </nav>
+</aside>

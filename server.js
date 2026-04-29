@@ -64,6 +64,45 @@ app.use(sessionMiddleware);
 // 3. Tell Socket.io to use it (This fixes your crash!)
 io.engine.use(sessionMiddleware);
 
+async function ensureSystemConfigTable() {
+    try {
+        await db.query(`
+            CREATE TABLE IF NOT EXISTS system_config (
+                key VARCHAR(100) PRIMARY KEY,
+                value TEXT NOT NULL
+            )
+        `);
+
+        await db.query(
+            `INSERT INTO system_config (key, value)
+             VALUES ('maintenance_mode', 'false')
+             ON CONFLICT (key) DO NOTHING`
+        );
+    } catch (err) {
+        console.error('System config init warning:', err.message);
+    }
+}
+
+ensureSystemConfigTable();
+
+// --- MAINTENANCE MODE CHECK ---
+app.use(async (req, res, next) => {
+    try {
+        const config = await db.query("SELECT value FROM system_config WHERE key = 'maintenance_mode' LIMIT 1");
+        const rawValue = config.rows.length > 0 ? config.rows[0].value : false;
+        const textValue = String(rawValue).toLowerCase();
+        const isMaintenance = rawValue === true || rawValue === 1 || textValue === 'true' || textValue === '1';
+
+        // If maintenance is ON and user is NOT an admin, block them
+        if (isMaintenance && req.session.role !== 'admin' && req.path !== '/staff-portal' && !req.path.startsWith('/auth')) {
+            return res.render('maintenance-mode');
+        }
+        next();
+    } catch (err) {
+        next();
+    }
+});
+
 // --- MULTER FILE UPLOAD CONFIGURATION ---
 // Configure how files are stored
 const storage = multer.diskStorage({
@@ -189,10 +228,13 @@ app.post('/auth/signup', async (req, res) => {
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
 
+        // Mechanics must be approved by admin before they can log in.
+        const accountStatus = role === 'mechanic' ? 'pending' : 'active';
+
         // 3. Insert into PostgreSQL
         const newUser = await db.query(
-            'INSERT INTO users (full_name, email, phone, password, role) VALUES ($1, $2, $3, $4, $5) RETURNING id',
-            [full_name, email, phone, hashedPassword, role]
+            'INSERT INTO users (full_name, email, phone, password, role, status) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
+            [full_name, email, phone, hashedPassword, role, accountStatus]
         );
 
         console.log("New User Created ID:", newUser.rows[0].id);
@@ -219,6 +261,15 @@ app.post('/auth/login', async (req, res) => {
 
         const user = result.rows[0];
 
+        // Block suspended accounts before doing any password work.
+        if (user.status === 'suspended') {
+            return res.status(403).send('Your account has been suspended. Please contact support.');
+        }
+
+        if (user.role === 'mechanic' && user.status === 'pending') {
+            return res.send("Your mechanic account is awaiting admin approval.");
+        }
+
         // Compare hashed password
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) {
@@ -233,6 +284,8 @@ app.post('/auth/login', async (req, res) => {
         // Redirect based on role
         if (user.role === 'owner') {
             res.redirect('/owner/dashboard');
+        } else if (user.role === 'admin') {
+            res.redirect('/admin/dashboard');
         } else {
             res.redirect('/mechanic/dashboard');
         }
@@ -248,6 +301,285 @@ const isAuthenticated = (req, res, next) => {
     if (req.session.userId) return next();
     res.redirect('/login');
 };
+
+// --- ADMIN AUTH MIDDLEWARE ---
+const isAdmin = (req, res, next) => {
+    if (req.session.userId && req.session.role === 'admin') {
+        return next();
+    }
+    res.redirect('/staff-portal');
+};
+
+// 1. Hidden Login Page
+app.get('/staff-portal', (req, res) => {
+    res.render('admin/login');
+});
+
+// 2. Admin Login Logic
+app.post('/auth/admin-login', async (req, res) => {
+    const { email, password } = req.body;
+
+    try {
+        const result = await db.query(
+            'SELECT * FROM users WHERE LOWER(email) = LOWER($1) AND role = $2',
+            [email, 'admin']
+        );
+
+        if (result.rows.length === 0) {
+            return res.send('Invalid Credentials');
+        }
+
+        const adminUser = result.rows[0];
+        const storedPassword = String(adminUser.password || '');
+        const isHashedPassword = storedPassword.startsWith('$2a$') || storedPassword.startsWith('$2b$') || storedPassword.startsWith('$2y$');
+
+        let isValidPassword = false;
+        if (isHashedPassword) {
+            isValidPassword = await bcrypt.compare(password, storedPassword);
+        } else {
+            // Backward compatibility: allow legacy plain-text admin passwords once, then migrate.
+            isValidPassword = password === storedPassword;
+            if (isValidPassword) {
+                const migratedHash = await bcrypt.hash(password, 10);
+                await db.query('UPDATE users SET password = $1 WHERE id = $2', [migratedHash, adminUser.id]);
+            }
+        }
+
+        if (isValidPassword) {
+            req.session.userId = adminUser.id;
+            req.session.userName = adminUser.full_name;
+            req.session.role = 'admin';
+            return res.redirect('/admin/dashboard');
+        }
+
+        res.send('Invalid Credentials');
+    } catch (err) {
+        console.error('Admin login error:', err);
+        res.status(500).send('Admin login failed');
+    }
+});
+
+// 3. Admin Dashboard Data
+// --- ADMIN DASHBOARD DATA (PRO VERSION) ---
+app.get('/admin/dashboard', isAdmin, async (req, res) => {
+    try {
+        // 1. Revenue - Sum of all completed job prices
+        const rev = await db.query("SELECT COALESCE(SUM(total_price), 0) AS sum FROM jobs WHERE status = 'completed'");
+        
+        // 2. Car Owner Stats - Total count with online/offline split
+        const owners = await db.query(`
+            SELECT 
+                COUNT(*) as total,
+                COUNT(*) FILTER (WHERE is_online = true) as online,
+                COUNT(*) FILTER (WHERE is_online = false) as offline
+            FROM users WHERE role = 'owner'`);
+
+        // 3. Mechanic Stats - Total count with online/offline split
+        const mechanics = await db.query(`
+            SELECT 
+                COUNT(*) as total,
+                COUNT(*) FILTER (WHERE is_online = true) as online,
+                COUNT(*) FILTER (WHERE is_online = false) as offline
+            FROM users WHERE role = 'mechanic'`);
+
+        // 4. Job Stats - Total, completed, and active job counts
+        const jobs = await db.query(`
+            SELECT 
+                COUNT(*) as total,
+                COUNT(*) FILTER (WHERE status = 'completed') as completed,
+                COUNT(*) FILTER (WHERE status != 'completed') as active
+            FROM jobs`);
+
+        // 5. Live Feed - Recent 15 jobs with owner and mechanic details
+        const liveFeed = await db.query(`
+            SELECT j.*, 
+                   u1.full_name as owner_name, 
+                   u2.full_name as mechanic_name,
+                   u2.is_online as mechanic_online
+            FROM jobs j 
+            JOIN users u1 ON j.owner_id = u1.id 
+            LEFT JOIN users u2 ON j.mechanic_id = u2.id 
+            ORDER BY j.updated_at DESC LIMIT 15`);
+
+        // 6. System Health - Maintenance mode status
+        const sys = await db.query("SELECT value FROM system_config WHERE key = 'maintenance_mode' LIMIT 1");
+
+        res.render('admin/dashboard', {
+            revenue: rev.rows[0]?.sum || 0,
+            ownerStats: owners.rows[0] || { total: 0, online: 0, offline: 0 },
+            mechStats: mechanics.rows[0] || { total: 0, online: 0, offline: 0 },
+            jobStats: jobs.rows[0] || { total: 0, completed: 0, active: 0 },
+            liveJobs: liveFeed.rows || [],
+            maintenanceMode: sys.rows[0]?.value || false,
+            avgRating: 4.2, // Can be made dynamic by adding average rating query
+            systemStatus: sys.rows[0]?.value === true || sys.rows[0]?.value === 1
+        });
+    } catch (err) { 
+        console.error('Admin dashboard error:', err); 
+        res.status(500).send("Error loading dashboard"); 
+    }
+});
+
+app.get('/admin/users', isAdmin, async (req, res) => {
+    try {
+        const roleFilter = String(req.query.role || 'all').toLowerCase();
+        const searchFilter = String(req.query.search || '').trim();
+        const allowedFilters = ['all', 'owner', 'mechanic'];
+        const activeFilter = allowedFilters.includes(roleFilter) ? roleFilter : 'all';
+
+        let query = `
+            SELECT u.*, 
+                   (SELECT COUNT(*) FROM vehicles v WHERE v.owner_id = u.id) as vehicle_count,
+                   (SELECT COUNT(*) FROM jobs j WHERE j.mechanic_id = u.id OR j.owner_id = u.id) as activity_count
+            FROM users u
+            WHERE 1 = 1
+        `;
+        const queryParams = [];
+
+        if (activeFilter !== 'all') {
+            query += ` AND u.role = $1`;
+            queryParams.push(activeFilter);
+        }
+
+        if (searchFilter) {
+            queryParams.push(`%${searchFilter}%`);
+            query += ` AND (u.full_name ILIKE $${queryParams.length} OR u.email ILIKE $${queryParams.length})`;
+        }
+
+        query += ` ORDER BY u.created_at DESC`;
+
+        const result = await db.query(query, queryParams);
+
+        res.render('admin/users', {
+            users: result.rows,
+            currentFilter: activeFilter,
+            currentSearch: searchFilter
+        });
+    } catch (err) {
+        console.error('Admin users page error:', err);
+        res.status(500).send('Failed to load users page');
+    }
+});
+
+app.get('/admin/system', isAdmin, (req, res) => {
+    res.redirect('/admin/dashboard');
+});
+
+// 4. Mechanic Approval API
+app.post('/api/admin/approve-mechanic', isAdmin, async (req, res) => {
+    try {
+        await db.query("UPDATE users SET status = 'active' WHERE id = $1 AND role = 'mechanic'", [req.body.userId]);
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Approve mechanic error:', err);
+        res.status(500).json({ success: false, message: 'Could not approve mechanic.' });
+    }
+});
+
+app.post('/api/admin/toggle-maintenance', isAdmin, async (req, res) => {
+    try {
+        const isEnabled = !!req.body.isEnabled;
+        const value = isEnabled ? 'true' : 'false';
+
+        await db.query(
+            `INSERT INTO system_config (key, value)
+             VALUES ('maintenance_mode', $1)
+             ON CONFLICT (key)
+             DO UPDATE SET value = EXCLUDED.value`,
+            [value]
+        );
+
+        res.json({ success: true, isEnabled });
+    } catch (err) {
+        console.error('Toggle maintenance error:', err);
+        res.status(500).json({ success: false, message: 'Failed to update maintenance mode.' });
+    }
+});
+
+app.post('/api/admin/user/status', isAdmin, async (req, res) => {
+    try {
+        const { userId, newStatus } = req.body;
+
+        if (!userId || !newStatus) {
+            return res.status(400).json({ success: false });
+        }
+
+        if (!['active', 'suspended'].includes(newStatus)) {
+            return res.status(400).json({ success: false });
+        }
+
+        await db.query('UPDATE users SET status = $1 WHERE id = $2 AND role <> $3', [newStatus, userId, 'admin']);
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Update user status error:', err);
+        res.status(500).json({ success: false });
+    }
+});
+
+app.post('/api/admin/user/delete', isAdmin, async (req, res) => {
+    try {
+        await db.query('DELETE FROM users WHERE id = $1', [req.body.userId]);
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Delete user error:', err);
+        res.status(500).json({ success: false });
+    }
+});
+
+app.post('/api/admin/suspend-user', isAdmin, async (req, res) => {
+    try {
+        const { userId, status } = req.body;
+
+        if (!userId || !status) {
+            return res.status(400).json({ success: false, message: 'userId and status are required.' });
+        }
+
+        if (!['active', 'suspended'].includes(status)) {
+            return res.status(400).json({ success: false, message: 'Invalid status value.' });
+        }
+
+        await db.query('UPDATE users SET status = $1 WHERE id = $2 AND role <> $3', [status, userId, 'admin']);
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Suspend user error:', err);
+        res.status(500).json({ success: false, message: 'Failed to update user status.' });
+    }
+});
+
+// --- 1. ADMIN: FETCH USER FOR EDITING ---
+app.get('/admin/edit-user/:id', isAdmin, async (req, res) => {
+    try {
+        const result = await db.query('SELECT * FROM users WHERE id = $1', [req.params.id]);
+        res.render('admin/edit-user', { user: result.rows[0] });
+    } catch (err) { res.status(500).send("Error"); }
+});
+
+// --- 2. ADMIN: UPDATE USER DATA (PERSISTENT) ---
+app.post('/api/admin/update-user', isAdmin, async (req, res) => {
+    const { userId, full_name, phone, role, status, newPassword } = req.body;
+    
+    try {
+        let query = 'UPDATE users SET full_name = $1, phone = $2, role = $3, status = $4';
+        let params = [full_name, phone, role, status];
+
+        // If a new password was provided, hash it before saving
+        if (newPassword && newPassword.trim() !== "") {
+            const salt = await bcrypt.genSalt(10);
+            const hashedPassword = await bcrypt.hash(newPassword, salt);
+            query += ', password = $5 WHERE id = $6';
+            params.push(hashedPassword, userId);
+        } else {
+            query += ' WHERE id = $5';
+            params.push(userId);
+        }
+
+        await db.query(query, params);
+        res.json({ success: true });
+    } catch (err) { 
+        console.error(err);
+        res.status(500).json({ success: false }); 
+    }
+});
 
 // Route to show Add Car page
 app.get('/owner/add-car', isAuthenticated, (req, res) => {
@@ -372,9 +704,13 @@ app.get('/owner/activity', isAuthenticated, async (req, res) => {
         `;
         const result = await db.query(query, [userId]);
 
-        // Separate jobs into Pending and History, then group by date
-        const pendingArray = result.rows.filter(j => j.status !== 'completed');
-        const historyArray = result.rows.filter(j => j.status === 'completed');
+        // Separate jobs into current bookings and history.
+        // Only approved/in-progress bookings stay in the booking tab.
+        const activeBookingStatuses = ['accepted', 'diagnosing', 'fixing'];
+        const historicalStatuses = ['completed', 'cancelled'];
+
+        const pendingArray = result.rows.filter(j => activeBookingStatuses.includes(j.status));
+        const historyArray = result.rows.filter(j => historicalStatuses.includes(j.status));
         
         const pendingJobs = groupJobsByDate(pendingArray);
         const historyJobs = groupJobsByDate(historyArray);
@@ -539,7 +875,7 @@ app.post('/owner/confirm-booking', isAuthenticated, async (req, res) => {
 });
 
 // FINAL STEP: Actually save to Database
-app.post('/owner/finalize-booking', isAuthenticated, async (req, res) => {
+app.post('/owner/finalize-booking', isAuthenticated, upload.single('diag_photo'), async (req, res) => {
     const { vehicle_id, service_type, scheduled_date } = req.body;
     try {
         if (isPastScheduledDate(scheduled_date)) {
@@ -645,10 +981,24 @@ app.post('/owner/car/:id/delete', isAuthenticated, async (req, res) => {
 app.get('/owner/sos', isAuthenticated, async (req, res) => {
     try {
         const cars = await db.query('SELECT * FROM vehicles WHERE owner_id = $1', [req.session.userId]);
+        
+        // Get count of online mechanics (available for SOS dispatch)
+        const mechCountRes = await db.query(
+            'SELECT COUNT(*) as count FROM users WHERE role = $1 AND is_online = $2',
+            ['mechanic', true]
+        );
+        const mechanicCount = mechCountRes.rows[0].count || 0;
+        
+        // Calculate estimated ETA (typically 8-15 minutes for SOS, depends on mechanic proximity)
+        // Default range: 8-12 minutes, but can scale based on mechanic count
+        const estimatedETA = '8 - 12 minutes';
+        
         res.render('owner/sos', { 
             userName: req.session.userName, 
             cars: cars.rows,
-            userId: req.session.userId
+            userId: req.session.userId,
+            estimatedETA: estimatedETA,
+            mechanicCount: mechanicCount
         });
     } catch (err) {
         console.error(err);
@@ -665,11 +1015,33 @@ app.get('/owner/sos', isAuthenticated, async (req, res) => {
         });
     });
 
-app.get('/mechanic/dashboard', isAuthenticated, (req, res) => {
-    res.render('mechanic/dashboard', { 
-        userName: req.session.userName,
-        userId: req.session.userId // <--- ADD THIS LINE TO PREVENT ERRORS
-    });
+app.get('/mechanic/dashboard', isAuthenticated, async (req, res) => {
+    try {
+        const user = await db.query('SELECT role, status FROM users WHERE id = $1', [req.session.userId]);
+
+        if (user.rows.length === 0) {
+            return res.redirect('/login');
+        }
+
+        if (user.rows[0].role !== 'mechanic') {
+            return res.redirect('/login');
+        }
+
+        if (user.rows[0].status === 'pending') {
+            return res.render('mechanic/under-review', {
+                userName: req.session.userName,
+                userId: req.session.userId
+            });
+        }
+
+        res.render('mechanic/dashboard', {
+            userName: req.session.userName,
+            userId: req.session.userId
+        });
+    } catch (err) {
+        console.error('Mechanic dashboard access error:', err);
+        res.status(500).send('Error loading mechanic dashboard');
+    }
 });
 
 // GET: MECHANIC EARNINGS PAGE
@@ -989,10 +1361,13 @@ app.get('/logout', (req, res) => {
             const query = `
                 SELECT j.*, 
                     u.full_name as owner_name, u.phone as owner_phone, u.location_lat, u.location_lng,
-                    v.make, v.model, v.plate_number 
+                    v.make, v.model, v.year, v.tyre_size, v.plate_number,
+                    r.rating as customer_rating,
+                    r.feedback as customer_feedback
             FROM jobs j 
             JOIN users u ON j.owner_id = u.id 
             JOIN vehicles v ON j.vehicle_id = v.id 
+            LEFT JOIN reviews r ON r.job_id = j.id
             WHERE j.mechanic_id = $1 OR (j.status = 'pending' AND j.mechanic_id IS NULL)
             ORDER BY j.created_at DESC`;
         
@@ -1007,8 +1382,8 @@ app.get('/logout', (req, res) => {
                 bookings: openJobs.filter(j => !j.sos_active),
                 // Active: any job currently in progress (SOS or booking)
                 active: jobs.filter(j => ['accepted', 'diagnosing', 'fixing'].includes(j.status)),
-                // Completed history
-                history: jobs.filter(j => j.status === 'completed')
+                // History includes completed and cancelled jobs
+                history: jobs.filter(j => ['completed', 'cancelled'].includes(j.status))
             });
         } catch (err) {
             console.error(err);
@@ -1043,6 +1418,7 @@ app.get('/logout', (req, res) => {
                 message: 'Mechanic has approved the problem and started the repair.'
             });
             io.to('user_' + ownerId).emit('checklist_activated', { jobId });
+            io.to('user_' + req.session.userId).emit('checklist_activated', { jobId });
 
             io.emit('job_verified', { jobId });
             res.json({ success: true });
@@ -1075,6 +1451,7 @@ app.get('/logout', (req, res) => {
             });
 
             io.to('user_' + jobRes.rows[0].owner_id).emit('checklist_activated', { jobId });
+            io.to('user_' + jobRes.rows[0].mechanic_id).emit('checklist_activated', { jobId });
 
             res.json({ success: true });
         } catch (err) {
@@ -1214,6 +1591,16 @@ app.get('/logout', (req, res) => {
                     professionalMessage: `Booking approved by ${mechanic.full_name || req.session.userName}. Contact: ${mechanic.phone || 'Not provided'}${mechanic.garage_location ? ` | Garage: ${mechanic.garage_location}` : ''}`
                 });
             } else {
+                // Notify the owner first so they see the cancellation before the booking moves to history.
+                io.to('user_' + ownerId).emit('appointment_update', {
+                    jobId,
+                    decision,
+                    mechanicName: mechanic.full_name || req.session.userName,
+                    mechanicPhone: mechanic.phone || null,
+                    garageLocation: mechanic.garage_location || null,
+                    professionalMessage: `Your booking was cancelled by ${mechanic.full_name || req.session.userName}. It will now move to history.`
+                });
+
                 const updateRes = await db.query(
                     "UPDATE jobs SET status = $1, mechanic_id = $2 WHERE id = $3 AND status = 'pending' AND mechanic_id IS NULL",
                     [decision, req.session.userId, jobId]
@@ -1222,15 +1609,6 @@ app.get('/logout', (req, res) => {
                 if (updateRes.rowCount === 0) {
                     return res.status(409).json({ success: false, message: 'This booking was already handled by another mechanic.' });
                 }
-
-                io.to('user_' + ownerId).emit('appointment_update', {
-                    jobId,
-                    decision,
-                    mechanicName: mechanic.full_name || req.session.userName,
-                    mechanicPhone: mechanic.phone || null,
-                    garageLocation: mechanic.garage_location || null,
-                    professionalMessage: `Your booking request was declined by ${mechanic.full_name || req.session.userName}. Please select another available mechanic.`
-                });
             }
             
             res.json({ success: true });
@@ -1365,6 +1743,13 @@ io.on('connection', async (socket) => {
 
     // Check if this is an online mechanic and join them to the room
     const session = socket.request.session;
+    
+    // If an admin connects, they join a special monitoring room
+    if (session && session.role === 'admin') {
+        socket.join('admin_room');
+        console.log(`Admin ${session.userId} joined admin_room`);
+    }
+    
     if (session && session.userId && session.role === 'mechanic') {
         try {
             const result = await db.query('SELECT is_online FROM users WHERE id = $1', [session.userId]);
@@ -1420,6 +1805,8 @@ io.on('connection', async (socket) => {
                 owner_name: data.ownerName,
                 make: car.make,
                 model: car.model,
+                year: car.year,
+                tyre_size: car.tyre_size,
                 plate_number: car.plate_number,
                 service_type: data.issue,
                 sos_active: true,
@@ -1437,10 +1824,22 @@ io.on('connection', async (socket) => {
             const session = socket.request.session;
             if (!session || !session.userId) return;
 
-            await db.query('UPDATE jobs SET status = $1, sos_active = $2 WHERE owner_id = $3 AND status = $4', 
-                           ['completed', false, session.userId, 'pending']);
+            // Mark the pending SOS job as cancelled (completed with sos_active false)
+            const cancelResult = await db.query(
+                'UPDATE jobs SET status = $1, sos_active = $2 WHERE owner_id = $3 AND status = $4 AND sos_active = $5 RETURNING id',
+                ['completed', false, session.userId, 'pending', true]
+            );
             
-            io.emit('sos_cancelled', { ownerName: session.userName });
+            // Emit confirmation back to this owner's socket
+            if (cancelResult.rows.length > 0) {
+                socket.emit('sos_cancelled_confirmed', { success: true });
+            }
+            
+            // Broadcast cancellation to all mechanics so they stop pinging about this job
+            io.emit('sos_cancelled', { 
+                ownerName: session.userName,
+                timestamp: new Date().toISOString()
+            });
         } catch (err) { console.error(err); }
     });
 
@@ -1486,22 +1885,54 @@ io.on('connection', async (socket) => {
                 [mechanicId, jobId]
             );
 
-            // 4. NOTIFY OWNER: Send the acceptance event only
-            // io.to('user_' + checkJob.rows[0].owner_id).emit('job_accepted_with_code', {
-            //     mechanicName: mech.full_name,
-            //     mechanicPhone: mech.phone,
-            //     mechanicRating: mech.avg_rating,
-            //     startCode: startCode,
-            //     jobId: jobId
-            // });
+            // Get owner's last known location for distance calculation
+            const ownerLocRes = await db.query(
+                'SELECT location_lat, location_lng FROM users WHERE id = $1',
+                [checkJob.rows[0].owner_id]
+            );
+            
+            const ownerLat = ownerLocRes.rows[0]?.location_lat;
+            const ownerLng = ownerLocRes.rows[0]?.location_lng;
+            
+            // Get mechanic's location
+            const mechLocRes = await db.query(
+                'SELECT location_lat, location_lng FROM users WHERE id = $1',
+                [mechanicId]
+            );
+            
+            const mechLat = mechLocRes.rows[0]?.location_lat;
+            const mechLng = mechLocRes.rows[0]?.location_lng;
+            
+            // Calculate distance in km using Haversine formula
+            let distance = null;
+            let estimatedArrival = '8 - 12 minutes';
+            
+            if (ownerLat && ownerLng && mechLat && mechLng) {
+                const R = 6371; // Earth's radius in km
+                const dLat = (mechLat - ownerLat) * Math.PI / 180;
+                const dLng = (mechLng - ownerLng) * Math.PI / 180;
+                const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                          Math.cos(ownerLat * Math.PI / 180) * Math.cos(mechLat * Math.PI / 180) *
+                          Math.sin(dLng / 2) * Math.sin(dLng / 2);
+                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+                distance = Math.round((R * c) * 10) / 10; // Round to 1 decimal
+                
+                // Estimate arrival: approximately 1 minute per 1.5 km + 2 min buffer
+                const estimatedMin = Math.ceil(distance / 1.5) + 2;
+                estimatedArrival = `${estimatedMin} - ${estimatedMin + 3} minutes`;
+            }
 
-            // Keep legacy event for existing listeners
+            // 4. NOTIFY OWNER: Send the acceptance event with distance & ETA
             io.emit('job_taken', {
                 jobId: jobId,
                 ownerId: checkJob.rows[0].owner_id,
                 mechanicName: mech.full_name,
                 mechanicPhone: mech.phone,
-                mechanicRating: mech.avg_rating
+                mechanicRating: mech.avg_rating,
+                distance: distance,
+                estimatedArrival: estimatedArrival,
+                mechanicLat: mechLat,
+                mechanicLng: mechLng
             });
 
             io.to('user_' + checkJob.rows[0].owner_id).emit('job_progress_update', {
@@ -1527,11 +1958,20 @@ io.on('connection', async (socket) => {
             const ownerRes = await db.query('SELECT owner_id FROM jobs WHERE id = $1 LIMIT 1', [data.jobId]);
             if (ownerRes.rows.length === 0) return;
 
+            // Send update to owner
             io.to('user_' + ownerRes.rows[0].owner_id).emit('task_update', {
                 jobId: data.jobId,
                 taskId: data.taskId,
                 isCompleted: data.isCompleted,
                 progress: data.progress
+            });
+            
+            // Forward EVERY update to the admin room for live monitoring
+            io.to('admin_room').emit('admin_live_update', { 
+                jobId: data.jobId, 
+                status: 'fixing', 
+                msg: `Task Updated: ${data.taskId}`,
+                timestamp: new Date().toISOString()
             });
         } catch (err) {
             console.error('task_update relay error:', err);

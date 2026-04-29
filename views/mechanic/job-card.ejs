@@ -62,14 +62,12 @@
             <h2 style="font-weight: 800; margin: 0;">Digital Job Card</h2>
             <button onclick="location.href='/mechanic/dashboard'" style="background: rgba(255,255,255,0.1); border:none; color:white; padding: 8px; border-radius: 10px;"><i data-lucide="x"></i></button>
         </div>
-        <p style="opacity: 0.7; font-size: 13px; margin-top: 5px;"><%= job.owner_name %> • <%= job.make %> <%= job.model %></p>
-        
-        <% if (job.status === 'completed') { %>
-            <div style="background: #fff7ed; color: #c2410c; padding: 10px; border-radius: 10px; margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
-                <i data-lucide="lock" size="18"></i>
-                <span style="font-size: 12px; font-weight: 800;">LOCKED RECORD: This job is finalized and cannot be edited.</span>
-            </div>
-        <% } %>
+        <p style="opacity: 0.7; font-size: 13px; margin-top: 5px;">
+            <%= job.owner_name %> • <%= job.make %> <%= job.model %>
+            <% if (parts && parts.length > 0) { %>
+                <span style="margin-left:12px; font-size:12px; color:#f97316; font-weight:700;">• Parts quoted: <%= parts.length %></span>
+            <% } %>
+        </p>
     </div>
 
     <div style="padding: 20px;">
@@ -91,6 +89,7 @@
         <div id="job-card-main">
         <!-- REAL-TIME PROGRESS BAR -->
         <% if (job.status === 'fixing' || job.status === 'completed') { %>
+        <div id="checklist-section">
         <div class="progress-banner">
             <span style="font-weight: 700; color: #1e293b;">Overall Progress</span>
             <span class="fraction"><span id="completed-count">0</span>/<span id="total-count">10</span></span>
@@ -104,17 +103,25 @@
         <div id="checklist-items">
             <!-- Loaded via JavaScript -->
         </div>
+        </div>
         <% } else { %>
-        <div style="background:#f8fafc; border:1.5px solid #e2e8f0; border-radius:14px; padding:16px; margin-bottom:18px;">
-            <p style="margin:0; color:#334155; font-size:13px; font-weight:700;">
-                <% if (job.status === 'accepted') { %>
-                    Step 1 of 3: Drive to the customer's car, then tap <strong>I've Reached the Car</strong>.
-                <% } else if (job.status === 'diagnosing') { %>
-                    Step 2 of 3: Confirm inspection and tap <strong>Problem Approved</strong> to activate the checklist.
-                <% } else { %>
-                    Checklist will activate once the job reaches active repair stage.
-                <% } %>
-            </p>
+        <div id="checklist-section" style="display:none;">
+        <div class="progress-banner">
+            <span style="font-weight: 700; color: #1e293b;">Overall Progress</span>
+            <span class="fraction"><span id="completed-count">0</span>/<span id="total-count">10</span></span>
+        </div>
+        <div style="height: 6px; background: #e2e8f0; border-radius: 10px; margin-top: -33px; margin-bottom: 30px; margin-left: 20px; margin-right: 20px;">
+            <div id="bar-fill" style="width: 0%; height: 100%; background: var(--action-orange); border-radius: 10px; transition: 0.5s;"></div>
+        </div>
+
+        <p class="section-label">Maintenance Checklist</p>
+        <div id="checklist-items">
+            <!-- Loaded via JavaScript -->
+        </div>
+        </div>
+
+        <div id="waiting-state" style="background:#f8fafc; border:1.5px solid #e2e8f0; border-radius:14px; padding:16px; margin-bottom:18px;">
+            <p style="margin:0; color:#334155; font-size:13px; font-weight:700;">Checklist will activate once the job reaches the active repair stage.</p>
         </div>
         <% } %>
 
@@ -160,7 +167,7 @@
     </div>
 
     <!-- BOTTOM ACTIONS -->
-    <div class="sticky-actions">
+    <div id="sticky-actions" class="sticky-actions">
         <% if (job.status === 'accepted') { %>
             <button onclick="markReachedCar()" class="btn-primary" style="width: 100%; border-radius: 14px;">
                 I've Reached The Car - Start Checklist
@@ -169,20 +176,30 @@
             <button onclick="approveProblemAndStart()" class="btn-primary" style="width: 100%; border-radius: 14px; background: #0f172a;">
                 Problem Approved - Activate Checklist
             </button>
-        <% } else if (job.status !== 'completed') { %>
-            <!-- 1. Ability to quote multiple parts -->
+        <% } %>
+
+        <!-- Show Quote and Finish controls for mechanics regardless of intermediate status if parts are quoted or job is not completed -->
+        <% if (job.status !== 'completed') { %>
             <button onclick="location.href='/mechanic/job/<%= job.id %>/quote'" class="btn-outline" style="flex: 1; border-color: #cbd5e1;">
                 <i data-lucide="plus-circle"></i> Quote Part
             </button>
-            
-            <!-- 2. Final closure -->
-            <form action="/mechanic/job/<%= job.id %>/complete" method="POST" style="flex: 2;">
-                <button type="submit" class="btn-primary" style="width: 100%; border-radius: 14px;">
-                    Finish & Generate Receipt
-                </button>
-            </form>
+
+            <% if (parts && parts.length > 0) { %>
+                <form action="/mechanic/job/<%= job.id %>/complete" method="POST" style="flex: 2;">
+                    <button type="submit" class="btn-primary" style="width: 100%; border-radius: 14px;">
+                        Finish & Generate Receipt
+                    </button>
+                </form>
+            <% } else { %>
+                <!-- If no parts yet, provide an enabled Finish button as well (optional) -->
+                <form action="/mechanic/job/<%= job.id %>/complete" method="POST" style="flex: 2;">
+                    <button type="submit" class="btn-primary" style="width: 100%; border-radius: 14px;">
+                        Finish & Generate Receipt
+                    </button>
+                </form>
+            <% } %>
         <% } else { %>
-            <!-- ONLY SHOW THE BACK BUTTON FOR HISTORY -->
+            <!-- Back button for completed jobs -->
             <button onclick="location.href='/mechanic/dashboard'" class="btn-primary" style="width: 100%; background: #0f172a;">
                 Back to Dashboard
             </button>
@@ -193,6 +210,7 @@
         lucide.createIcons();
         let total = 0;
         let completed = 0;
+        const initialStatus = '<%= job.status %>';
 
         /*
         async function verifyArrival() {
@@ -222,6 +240,21 @@
             }
         });
 
+        socket.on('checklist_activated', (data) => {
+            if (data.jobId == '<%= job.id %>') {
+                const waitingState = document.getElementById('waiting-state');
+                const checklistSection = document.getElementById('checklist-section');
+                const stickyActions = document.getElementById('sticky-actions');
+
+                if (waitingState) waitingState.style.display = 'none';
+                if (checklistSection) checklistSection.style.display = 'block';
+                if (stickyActions) stickyActions.style.display = 'none';
+
+                AppAlert.show('Checklist Activated', 'Repair checklist is now live.', 'success');
+                loadChecklist();
+            }
+        });
+
         async function markReachedCar() {
             const res = await fetch('/api/mechanic/reached-car', {
                 method: 'POST',
@@ -230,7 +263,16 @@
             });
             const data = await res.json();
             if (data.success) {
-                AppAlert.show('Job Started', 'Owner notified and checklist is now active.', 'success', () => location.reload());
+                const waitingState = document.getElementById('waiting-state');
+                const checklistSection = document.getElementById('checklist-section');
+                const stickyActions = document.getElementById('sticky-actions');
+
+                if (waitingState) waitingState.style.display = 'none';
+                if (checklistSection) checklistSection.style.display = 'block';
+                if (stickyActions) stickyActions.style.display = 'none';
+
+                AppAlert.show('Job Started', 'Checklist is now active on both sides.', 'success');
+                loadChecklist();
             } else {
                 AppAlert.show('Error', data.message || 'Unable to update arrival status.', 'error');
             }
@@ -244,7 +286,16 @@
             });
 
             if (res.ok) {
-                AppAlert.show('Repair Started', 'Checklist is now active and owner has been notified.', 'success', () => location.reload());
+                const waitingState = document.getElementById('waiting-state');
+                const checklistSection = document.getElementById('checklist-section');
+                const stickyActions = document.getElementById('sticky-actions');
+
+                if (waitingState) waitingState.style.display = 'none';
+                if (checklistSection) checklistSection.style.display = 'block';
+                if (stickyActions) stickyActions.style.display = 'none';
+
+                AppAlert.show('Repair Started', 'Checklist is now active and live for both sides.', 'success');
+                loadChecklist();
             } else {
                 AppAlert.show('Error', 'Failed to start repair stage.', 'error');
             }
@@ -318,7 +369,11 @@
             }
         }
 
-        window.onload = loadChecklist;
+        window.onload = () => {
+            if (initialStatus === 'fixing' || initialStatus === 'completed') {
+                loadChecklist();
+            }
+        };
     </script>
     <!-- Include these at the bottom of your <body> -->
 <link rel="stylesheet" href="/css/alerts.css">

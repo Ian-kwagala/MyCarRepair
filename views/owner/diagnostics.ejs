@@ -71,6 +71,69 @@
             background: white; outline: none; font-size: 15px; transition: 0.3s;
         }
         .input-elegant:focus { border-color: var(--action-orange); box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.1); }
+
+        .camera-modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(2, 6, 23, 0.82);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            padding: 18px;
+        }
+        .camera-modal.active {
+            display: flex;
+        }
+        .camera-panel {
+            width: min(420px, 100%);
+            background: #0f172a;
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            border-radius: 18px;
+            padding: 14px;
+            color: #e2e8f0;
+            box-shadow: 0 24px 48px rgba(2, 6, 23, 0.4);
+        }
+        .camera-live {
+            width: 100%;
+            max-height: 60vh;
+            background: #020617;
+            border-radius: 14px;
+            object-fit: cover;
+        }
+        .camera-actions {
+            margin-top: 12px;
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .camera-btn {
+            border: none;
+            border-radius: 12px;
+            padding: 10px 14px;
+            font-size: 12px;
+            font-weight: 800;
+            cursor: pointer;
+        }
+        .camera-btn.capture {
+            background: #f97316;
+            color: #ffffff;
+        }
+        .camera-btn.done {
+            background: #16a34a;
+            color: #ffffff;
+        }
+        .camera-btn.cancel {
+            background: #334155;
+            color: #f8fafc;
+        }
+        #diagCameraStatus {
+            margin-top: 8px;
+            text-align: center;
+            font-size: 12px;
+            color: #cbd5e1;
+        }
     </style>
 
 </head>
@@ -87,7 +150,7 @@
     </div>
 
     <div style="padding: 25px 20px;">
-        <form action="/owner/finalize-booking" method="POST">
+        <form id="diagnosticsForm" action="/owner/finalize-booking" method="POST" enctype="multipart/form-data">
             
             <label class="label-text reveal delay-1" style="font-weight: 700; margin-bottom: 15px; display: block;">STEP 1: SELECT SYMPTOMS</label>
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 10px;">
@@ -116,9 +179,14 @@
             <!-- PHOTO SECTION -->
             <div class="reveal delay-3" style="margin-top: 35px;">
                 <label class="label-text" style="font-weight: 700; display: block; margin-bottom: 12px;">STEP 2: ADD VISUAL PROOF</label>
-                <div class="photo-zone" onclick="document.getElementById('diag_photo').click();" style="display: flex; flex-direction: column; align-items: center; justify-content: center; width: 120px; height: 120px; margin-bottom: 10px;">
+                <div class="photo-zone" style="display: flex; flex-direction: column; align-items: center; justify-content: center; width: 220px; min-height: 120px; margin-bottom: 10px;">
                     <div class="pulse-icon"><i data-lucide="camera" size="28"></i></div>
-                    <input type="file" id="diag_photo" name="diag_photo" accept="image/*" style="display: none;" onchange="showPreview(event)" required>
+                    <div style="display: flex; gap: 8px; margin-top: 4px; flex-wrap: wrap; justify-content: center;">
+                        <button type="button" onclick="triggerDiagnosticPhotoSource('gallery')" style="border: none; background: #f1f5f9; color: #1e293b; padding: 8px 10px; border-radius: 10px; font-size: 11px; font-weight: 700; cursor: pointer;">Upload</button>
+                        <button type="button" onclick="triggerDiagnosticPhotoSource('camera')" style="border: none; background: #f97316; color: #ffffff; padding: 8px 10px; border-radius: 10px; font-size: 11px; font-weight: 700; cursor: pointer;">Take Photo</button>
+                    </div>
+                    <input type="file" id="diag_photo_gallery" name="diag_photo" accept="image/*" style="display: none;">
+                    <input type="file" id="diag_photo_camera" name="diag_photo" accept="image/*" capture="environment" style="display: none;">
                 </div>
                 <div id="photo-preview" style="margin-top: 10px;"></div>
                 <h4 style="color: #1e293b; margin-top: 0;">Snap the Dashboard</h4>
@@ -155,11 +223,35 @@
         </form>
     </div>
 
+    <div id="diagCameraModal" class="camera-modal" aria-hidden="true">
+        <div class="camera-panel">
+            <video id="diagCameraVideo" class="camera-live" autoplay playsinline muted></video>
+            <div id="diagCameraStatus">Camera ready. Capture your dashboard photo.</div>
+            <div class="camera-actions">
+                <button type="button" id="diagCaptureBtn" class="camera-btn capture">Capture Photo</button>
+                <button type="button" id="diagDoneBtn" class="camera-btn done">Done</button>
+                <button type="button" id="diagCancelBtn" class="camera-btn cancel">Cancel</button>
+            </div>
+        </div>
+    </div>
+
     <script>
-        function showPreview(event) {
+        const diagnosticsForm = document.getElementById('diagnosticsForm');
+        const diagPhotoGallery = document.getElementById('diag_photo_gallery');
+        const diagPhotoCamera = document.getElementById('diag_photo_camera');
+        const diagCameraModal = document.getElementById('diagCameraModal');
+        const diagCameraVideo = document.getElementById('diagCameraVideo');
+        const diagCameraStatus = document.getElementById('diagCameraStatus');
+        const diagCaptureBtn = document.getElementById('diagCaptureBtn');
+        const diagDoneBtn = document.getElementById('diagDoneBtn');
+        const diagCancelBtn = document.getElementById('diagCancelBtn');
+
+        let activeDiagStream = null;
+        let capturedDiagFile = null;
+
+        function showPreview(file) {
             const preview = document.getElementById('photo-preview');
             preview.innerHTML = '';
-            const file = event.target.files[0];
             if (file) {
                 const img = document.createElement('img');
                 img.src = URL.createObjectURL(file);
@@ -171,6 +263,94 @@
                 preview.appendChild(img);
             }
         }
+
+        function closeDiagCameraModal() {
+            diagCameraModal.classList.remove('active');
+            diagCameraModal.setAttribute('aria-hidden', 'true');
+            if (activeDiagStream) {
+                activeDiagStream.getTracks().forEach((track) => track.stop());
+                activeDiagStream = null;
+            }
+            diagCameraVideo.srcObject = null;
+        }
+
+        async function openDiagCameraModal() {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                diagPhotoCamera.click();
+                return;
+            }
+
+            try {
+                activeDiagStream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: { ideal: 'environment' } },
+                    audio: false
+                });
+                diagCameraVideo.srcObject = activeDiagStream;
+                diagCameraModal.classList.add('active');
+                diagCameraModal.setAttribute('aria-hidden', 'false');
+                diagCameraStatus.textContent = 'Camera ready. Capture your dashboard photo.';
+            } catch (error) {
+                alert('Camera access was blocked. Please allow camera permission, then try again.');
+            }
+        }
+
+        function captureDiagPhoto() {
+            if (!diagCameraVideo.videoWidth || !diagCameraVideo.videoHeight) return;
+
+            const canvas = document.createElement('canvas');
+            canvas.width = diagCameraVideo.videoWidth;
+            canvas.height = diagCameraVideo.videoHeight;
+            const context = canvas.getContext('2d');
+            context.drawImage(diagCameraVideo, 0, 0, canvas.width, canvas.height);
+
+            canvas.toBlob((blob) => {
+                if (!blob) return;
+                capturedDiagFile = new File([blob], `diagnostic-${Date.now()}.jpg`, { type: 'image/jpeg' });
+                const transfer = new DataTransfer();
+                transfer.items.add(capturedDiagFile);
+                diagPhotoCamera.files = transfer.files;
+                showPreview(capturedDiagFile);
+                diagCameraStatus.textContent = 'Photo captured. Tap Done to continue.';
+            }, 'image/jpeg', 0.9);
+        }
+
+        function triggerDiagnosticPhotoSource(source) {
+            if (source === 'camera') {
+                openDiagCameraModal();
+                return;
+            }
+            diagPhotoGallery.click();
+        }
+
+        window.triggerDiagnosticPhotoSource = triggerDiagnosticPhotoSource;
+
+        diagPhotoGallery.addEventListener('change', (event) => {
+            if (event.target.files && event.target.files[0]) {
+                showPreview(event.target.files[0]);
+            }
+        });
+
+        diagPhotoCamera.addEventListener('change', (event) => {
+            if (event.target.files && event.target.files[0]) {
+                showPreview(event.target.files[0]);
+            }
+        });
+
+        diagCaptureBtn.addEventListener('click', captureDiagPhoto);
+        diagDoneBtn.addEventListener('click', closeDiagCameraModal);
+        diagCancelBtn.addEventListener('click', closeDiagCameraModal);
+
+        diagnosticsForm.addEventListener('submit', (event) => {
+            const hasGalleryFile = diagPhotoGallery.files && diagPhotoGallery.files.length > 0;
+            const hasCameraFile = diagPhotoCamera.files && diagPhotoCamera.files.length > 0;
+            if (!hasGalleryFile && !hasCameraFile) {
+                event.preventDefault();
+                alert('Please upload or take a diagnostic photo before submitting.');
+            }
+        });
+
+        window.addEventListener('beforeunload', closeDiagCameraModal);
+
         lucide.createIcons();
     </script>
     <!-- Include these at the bottom of your <body> -->

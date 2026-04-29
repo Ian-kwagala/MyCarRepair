@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Maintenance Mode | MyCarRepair</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="icon" type="image/png" href="/images/favicon.png">
+    <style>
+        body {
+            min-height: 100vh;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: radial-gradient(circle at 15% 20%, #1e3a8a 0, #0f172a 55%, #020617 100%);
+            color: #ffffff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            padding: 20px;
+        }
+
+        .maintenance-card {
+            width: 100%;
+            max-width: 520px;
+            background: rgba(15, 23, 42, 0.72);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            border-radius: 24px;
+            box-shadow: 0 25px 50px rgba(2, 6, 23, 0.45);
+            backdrop-filter: blur(8px);
+            text-align: center;
+            padding: 34px 28px;
+        }
+
+        .badge {
+            display: inline-block;
+            background: rgba(249, 115, 22, 0.2);
+            color: #fdba74;
+            border: 1px solid rgba(251, 146, 60, 0.45);
+            border-radius: 999px;
+            padding: 8px 14px;
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.4px;
+            margin-bottom: 14px;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 34px;
+            font-weight: 800;
+            letter-spacing: -0.6px;
+        }
+
+        p {
+            margin: 14px 0 0;
+            color: #cbd5e1;
+            line-height: 1.6;
+            font-size: 15px;
+        }
+
+        .action {
+            margin-top: 26px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            border-radius: 12px;
+            padding: 12px 16px;
+            font-weight: 700;
+            background: #f97316;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <main class="maintenance-card">
+        <div class="badge">System Update in Progress</div>
+        <h1>We will be back shortly</h1>
+        <p>
+            MyCarRepair is currently under maintenance to improve reliability and performance.
+            Please check back in a few minutes.
+        </p>
+        <!-- <a class="action" href="/staff-portal">Staff Portal</a> -->
+    </main>
+</body>
+</html>
